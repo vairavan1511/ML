@@ -100,15 +100,45 @@
 
     <div>
       <h3 class="font-semibold mb-2">Links</h3>
-      <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Plain text for now. Link Shield (locked, safe-to-inspect links) is added in the next step.</p>
-      <ul id="urls" class="space-y-1 text-sm font-mono"></ul>
+      <div id="urls" class="flex flex-wrap gap-2 text-sm font-mono"></div>
     </div>
+
+    <section id="emailPreviewSection" class="hidden border-t border-slate-100 dark:border-slate-800 pt-4">
+      <button id="previewToggle" type="button" class="font-semibold" aria-expanded="false" aria-controls="emailPreviewContent">Preview email body</button>
+      <div id="emailPreviewContent" class="hidden mt-3">
+        <p class="mb-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Links and images disabled for your safety</p>
+        <iframe id="emailPreviewFrame" sandbox="" referrerpolicy="no-referrer" title="Sanitized email body" class="w-full min-h-64 rounded border border-slate-300 bg-white dark:border-slate-700"></iframe>
+      </div>
+    </section>
 
     <div>
       <h3 class="font-semibold mb-2">Details</h3>
       <dl id="details" class="text-sm divide-y divide-slate-100 dark:divide-slate-800"></dl>
     </div>
   </section>
+
+  <div id="linkShieldModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="linkShieldTitle">
+    <div class="w-full max-w-lg rounded-lg border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+      <h2 id="linkShieldTitle" class="text-lg font-semibold">Link Shield</h2>
+      <p id="linkShieldUrl" class="mt-3 break-all rounded bg-slate-100 p-3 font-mono text-sm dark:bg-slate-800"></p>
+      <p class="mt-3 text-sm">Risk level: <strong id="linkShieldLevel"></strong></p>
+      <div class="mt-3">
+        <h3 class="text-sm font-semibold">Reasons</h3>
+        <ul id="linkShieldReasons" class="mt-1 list-disc space-y-1 pl-5 text-sm"></ul>
+      </div>
+      <div id="linkShieldConfirmation" class="hidden mt-4 space-y-2">
+        <p id="linkShieldCountdown" class="text-sm" aria-live="polite"></p>
+        <label for="linkShieldDomain" class="block text-sm">Type the link's domain to confirm</label>
+        <input id="linkShieldDomain" type="text" autocomplete="off" spellcheck="false" class="w-full rounded border border-slate-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+      </div>
+      <p id="linkShieldCopyStatus" class="mt-2 min-h-5 text-xs text-slate-500 dark:text-slate-400" aria-live="polite"></p>
+      <div class="mt-4 flex flex-wrap justify-end gap-2">
+        <button id="linkShieldCopy" type="button" class="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-700">Copy defanged link</button>
+        <button id="linkShieldOpen" type="button" class="hidden rounded bg-emerald-600 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">Open in new tab</button>
+        <button id="linkShieldClose" type="button" class="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-700">Close</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Model and accuracy -->
   <section id="modelInfo" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
@@ -155,6 +185,11 @@
   const TONE_HEX = { safe: '#10b981', warn: '#f59e0b', danger: '#ef4444' };
   const VERDICT_TONE = { 'SAFE': 'safe', 'SUSPICIOUS': 'warn', 'SPAM-PHISHING': 'danger' };
   const LEVEL_TONE = { 'LOW': 'safe', 'MEDIUM': 'warn', 'HIGH': 'danger' };
+  let realUrl = '';
+  let activeDefangedUrl = '';
+  let activeDomain = '';
+  let modalCountdownTimer = null;
+  let modalReturnFocus = null;
   const SAMPLES = {
     email: `From: security-alert@sbi-verify.xyz
 To: victim@example.com
@@ -170,9 +205,9 @@ Received-SPF: fail (sbi-verify.xyz: domain does not designate permitted senders)
 <p>Dear Customer,</p>
 <p>Your SBI account has been <b>SUSPENDED</b> due to suspicious activity.</p>
 <p>You must verify your KYC immediately to avoid permanent account closure.</p>
-<p>Click here to verify: <a href="http://sbi-kyc.xyz/verify?redirect=http://evil.top/steal">
+<p>Click here to verify: \x3ca href="http://sbi-kyc.xyz/verify?redirect=http://evil.top/steal">
 http://www.sbi.co.in/verify
-</a></p>
+\x3c/a></p>
 <p>Failure to act within 24 hours will result in legal action.</p>
 <p>Share your OTP with our agent: Call +91-9999999999</p>
 </body></html>`,
@@ -219,6 +254,132 @@ http://www.sbi.co.in/verify
     });
   }
 
+  function fillUrlChips(items) {
+    const container = $('urls');
+    container.textContent = '';
+    if (!items || !items.length) { setText(container, 'No links found'); return; }
+    items.forEach((u) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'inline-flex max-w-full items-center gap-2 rounded border border-slate-300 bg-white px-3 py-2 text-left dark:border-slate-700 dark:bg-slate-950';
+      button.setAttribute('aria-label', u.defanged + ', ' + u.level + ' risk, locked');
+
+      const linkText = document.createElement('span');
+      linkText.className = 'break-all';
+      setText(linkText, u.defanged);
+      button.appendChild(linkText);
+
+      const badge = document.createElement('span');
+      const badgeClasses = {
+        LOW: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
+        MEDIUM: 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200',
+        HIGH: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'
+      };
+      badge.className = 'shrink-0 rounded px-2 py-1 text-xs font-semibold ' + (badgeClasses[u.level] || 'bg-slate-100 text-slate-800');
+      setText(badge, u.level || NA);
+      button.appendChild(badge);
+
+      const lock = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      lock.setAttribute('viewBox', '0 0 24 24');
+      lock.setAttribute('width', '16');
+      lock.setAttribute('height', '16');
+      lock.setAttribute('fill', 'none');
+      lock.setAttribute('stroke', 'currentColor');
+      lock.setAttribute('stroke-width', '2');
+      lock.setAttribute('aria-hidden', 'true');
+      const lockPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      lockPath.setAttribute('d', 'M5 10h14v11H5zM8 10V7a4 4 0 0 1 8 0v3');
+      lock.appendChild(lockPath);
+      button.appendChild(lock);
+      button.addEventListener('click', () => openLinkShield(u, button));
+      container.appendChild(button);
+    });
+  }
+
+  function linkTarget(url) {
+    try {
+      let candidate = String(url || '').trim();
+      if (/^[a-z][a-z0-9+.-]*:/i.test(candidate)) {
+        if (!/^https?:\/\//i.test(candidate)) return null;
+      } else {
+        candidate = 'http://' + candidate;
+      }
+      const parsed = new URL(candidate);
+      if (!/^https?:$/.test(parsed.protocol)) return null;
+      return { url: parsed.href, domain: parsed.hostname.toLowerCase().replace(/\.$/, '') };
+    } catch (e) { return null; }
+  }
+
+  function updateOpenButton() {
+    const typed = $('linkShieldDomain').value.trim().toLowerCase().replace(/\.$/, '');
+    const confirmationDone = $('linkShieldConfirmation').classList.contains('hidden') || $('linkShieldCountdown').dataset.finished === 'true';
+    $('linkShieldOpen').disabled = !realUrl || !activeDomain || !confirmationDone || typed !== activeDomain;
+  }
+
+  function closeLinkShield() {
+    if (modalCountdownTimer !== null) {
+      clearInterval(modalCountdownTimer);
+      modalCountdownTimer = null;
+    }
+    $('linkShieldModal').classList.add('hidden');
+    $('linkShieldDomain').value = '';
+    if (modalReturnFocus) modalReturnFocus.focus();
+  }
+
+  function openLinkShield(u, trigger) {
+    if (modalCountdownTimer !== null) clearInterval(modalCountdownTimer);
+    modalReturnFocus = trigger;
+    const target = linkTarget(u.display);
+    realUrl = target ? target.url : '';
+    activeDefangedUrl = u.defanged || '';
+    activeDomain = target ? target.domain : '';
+    setText($('linkShieldUrl'), activeDefangedUrl);
+    setText($('linkShieldLevel'), u.level || NA);
+    const reasonList = $('linkShieldReasons');
+    reasonList.textContent = '';
+    (u.reasons || []).forEach((reason) => {
+      const item = document.createElement('li');
+      setText(item, reason);
+      reasonList.appendChild(item);
+    });
+    $('linkShieldCopyStatus').textContent = '';
+    $('linkShieldDomain').value = '';
+    $('linkShieldCountdown').dataset.finished = 'false';
+    const level = String(u.level || '').toUpperCase();
+    $('linkShieldConfirmation').classList.toggle('hidden', level !== 'MEDIUM');
+    $('linkShieldOpen').classList.toggle('hidden', level === 'HIGH');
+    $('linkShieldOpen').disabled = level !== 'LOW' || !realUrl;
+
+    if (level === 'MEDIUM') {
+      let remaining = 10;
+      setText($('linkShieldCountdown'), 'Open available in ' + remaining + ' seconds.');
+      $('linkShieldOpen').disabled = true;
+      modalCountdownTimer = window.setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          clearInterval(modalCountdownTimer);
+          modalCountdownTimer = null;
+          $('linkShieldCountdown').dataset.finished = 'true';
+          setText($('linkShieldCountdown'), 'Countdown complete.');
+          updateOpenButton();
+        } else {
+          setText($('linkShieldCountdown'), 'Open available in ' + remaining + ' seconds.');
+        }
+      }, 1000);
+    }
+    $('linkShieldModal').classList.remove('hidden');
+    $('linkShieldClose').focus();
+  }
+
+  async function copyDefangedLink() {
+    try {
+      await navigator.clipboard.writeText(activeDefangedUrl);
+      setText($('linkShieldCopyStatus'), 'Copied.');
+    } catch (e) {
+      setText($('linkShieldCopyStatus'), 'Could not copy to clipboard.');
+    }
+  }
+
   function fillDetails(rows) {
     const dl = $('details');
     dl.textContent = '';
@@ -256,14 +417,7 @@ http://www.sbi.co.in/verify
     setText($('channelLine'), 'Channel: ' + (d.channel || NA));
     fillList($('reasons'), d.reasons);
     fillChips($('highlights'), d.highlights);
-    const urls = $('urls');
-    urls.textContent = '';
-    (d.urls || []).forEach((u) => {
-      const li = document.createElement('li');
-      setText(li, u.defanged + '  (' + u.level + ', risk ' + u.risk + ')');
-      urls.appendChild(li);
-    });
-    if (!(d.urls || []).length) { const li = document.createElement('li'); setText(li, 'No links found'); urls.appendChild(li); }
+    fillUrlChips(d.urls || []);
 
     const rows = [
       ['ML spam probability', fmtPct(d.ml_score)],
@@ -271,10 +425,17 @@ http://www.sbi.co.in/verify
     ];
     const meta = d.metadata || {};
     Object.keys(meta).forEach((k) => {
+      if (k === 'html_preview') return;
       const v = meta[k];
       rows.push([k.replace(/_/g, ' '), (v !== null && typeof v === 'object') ? JSON.stringify(v).slice(0, 300) : String(v)]);
     });
     fillDetails(rows);
+
+    const preview = meta.html_preview || '';
+    $('emailPreviewSection').classList.toggle('hidden', !preview);
+    $('emailPreviewContent').classList.add('hidden');
+    $('previewToggle').setAttribute('aria-expanded', 'false');
+    $('emailPreviewFrame').srcdoc = preview;
   }
 
   function renderUrl(d) {
@@ -282,11 +443,8 @@ http://www.sbi.co.in/verify
     setText($('channelLine'), 'Link check (static analysis only)');
     fillList($('reasons'), d.reasons);
     fillChips($('highlights'), []);
-    const urls = $('urls');
-    urls.textContent = '';
-    const li = document.createElement('li');
-    setText(li, d.defanged);
-    urls.appendChild(li);
+    fillUrlChips([{ display: d.display, defanged: d.defanged, level: d.level, risk: d.risk, reasons: d.reasons }]);
+    $('emailPreviewSection').classList.add('hidden');
     fillDetails([['Level', d.level], ['Risk', d.risk + ' / 100']]);
   }
 
@@ -410,6 +568,23 @@ http://www.sbi.co.in/verify
   $('btnAnalyzeSms').addEventListener('click', () => analyze('sms'));
   $('btnAnalyzeUrl').addEventListener('click', () => analyze('url'));
   $('btnTheme').addEventListener('click', () => applyTheme(!document.documentElement.classList.contains('dark')));
+  $('previewToggle').addEventListener('click', () => {
+    const expanded = $('previewToggle').getAttribute('aria-expanded') === 'true';
+    $('previewToggle').setAttribute('aria-expanded', String(!expanded));
+    $('emailPreviewContent').classList.toggle('hidden', expanded);
+  });
+  $('linkShieldClose').addEventListener('click', closeLinkShield);
+  $('linkShieldCopy').addEventListener('click', copyDefangedLink);
+  $('linkShieldDomain').addEventListener('input', updateOpenButton);
+  $('linkShieldOpen').addEventListener('click', () => {
+    if (!$('linkShieldOpen').disabled && realUrl) window.open(realUrl, '_blank', 'noopener,noreferrer');
+  });
+  $('linkShieldModal').addEventListener('click', (event) => {
+    if (event.target === $('linkShieldModal')) closeLinkShield();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !$('linkShieldModal').classList.contains('hidden')) closeLinkShield();
+  });
 
   const dz = $('dropzone');
   ['dragenter', 'dragover'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('ring-2'); }));

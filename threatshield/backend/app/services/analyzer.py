@@ -89,6 +89,7 @@ def analyse_email_text(raw: str | bytes) -> dict[str, Any]:
             "attachments": parsed["attachments"],
             "auth": parsed["auth"],
             "parse_error": parsed.get("_parse_error"),
+            "html_preview": parsed["html_preview"],
         },
     }
 
