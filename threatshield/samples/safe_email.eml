@@ -1,0 +1,21 @@
+From: alice@example.com
+To: bob@example.com
+Subject: Meeting notes from Tuesday
+Date: Mon, 01 Jan 2024 10:00:00 +0000
+Message-ID: <meeting001@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Received-SPF: pass (example.com: domain of alice@example.com designates 1.2.3.4 as permitted sender)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=example.com; s=mail2024; h=from:to:subject:date; bh=abc==; b=sig==
+Authentication-Results: mx.example.com; dmarc=pass; spf=pass; dkim=pass
+
+Hi Bob,
+
+Please find attached the notes from Tuesday's project meeting.
+
+The next meeting is scheduled for next Friday at 2pm in conference room B.
+
+Let me know if you have any questions.
+
+Thanks,
+Alice

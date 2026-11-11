@@ -1,0 +1,157 @@
+{
+  "best_model": "LinearSVM",
+  "test_metrics_overall": {
+    "model": "LinearSVM",
+    "channel": "overall",
+    "accuracy": 0.9923,
+    "precision": 0.9894,
+    "recall": 0.9816,
+    "f1": 0.9855,
+    "roc_auc": 0.9994,
+    "confusion_matrix": [
+      [
+        1049,
+        4
+      ],
+      [
+        7,
+        374
+      ]
+    ],
+    "train_time_s": 13.05
+  },
+  "test_metrics_by_channel": [
+    {
+      "model": "LinearSVM",
+      "channel": "email",
+      "accuracy": 0.9955,
+      "precision": 0.993,
+      "recall": 0.9965,
+      "f1": 0.9947,
+      "roc_auc": 0.9999,
+      "confusion_matrix": [
+        [
+          373,
+          2
+        ],
+        [
+          1,
+          284
+        ]
+      ]
+    },
+    {
+      "model": "LinearSVM",
+      "channel": "sms",
+      "accuracy": 0.9897,
+      "precision": 0.9783,
+      "recall": 0.9375,
+      "f1": 0.9574,
+      "roc_auc": 0.9976,
+      "confusion_matrix": [
+        [
+          676,
+          2
+        ],
+        [
+          6,
+          90
+        ]
+      ]
+    }
+  ],
+  "model_comparison_on_val": [
+    {
+      "model": "NaiveBayes",
+      "channel": "overall",
+      "accuracy": 0.9735,
+      "precision": 0.9858,
+      "recall": 0.9134,
+      "f1": 0.9482,
+      "roc_auc": 0.9905,
+      "confusion_matrix": [
+        [
+          1047,
+          5
+        ],
+        [
+          33,
+          348
+        ]
+      ],
+      "train_time_s": 3.59
+    },
+    {
+      "model": "LogisticRegression",
+      "channel": "overall",
+      "accuracy": 0.9735,
+      "precision": 0.9831,
+      "recall": 0.916,
+      "f1": 0.9484,
+      "roc_auc": 0.9947,
+      "confusion_matrix": [
+        [
+          1046,
+          6
+        ],
+        [
+          32,
+          349
+        ]
+      ],
+      "train_time_s": 4.29
+    },
+    {
+      "model": "RandomForest",
+      "channel": "overall",
+      "accuracy": 0.9839,
+      "precision": 1.0,
+      "recall": 0.9396,
+      "f1": 0.9689,
+      "roc_auc": 0.9958,
+      "confusion_matrix": [
+        [
+          1052,
+          0
+        ],
+        [
+          23,
+          358
+        ]
+      ],
+      "train_time_s": 4.88
+    },
+    {
+      "model": "LinearSVM",
+      "channel": "overall",
+      "accuracy": 0.9916,
+      "precision": 0.9946,
+      "recall": 0.9738,
+      "f1": 0.9841,
+      "roc_auc": 0.9971,
+      "confusion_matrix": [
+        [
+          1050,
+          2
+        ],
+        [
+          10,
+          371
+        ]
+      ],
+      "train_time_s": 12.22
+    }
+  ],
+  "dataset_sizes": {
+    "train": 6689,
+    "train_india_synthetic": 300,
+    "val": 1433,
+    "test": 1434,
+    "note": "India synthetic messages used in TRAINING ONLY, never in val/test sets."
+  },
+  "split": {
+    "seed": 42,
+    "ratios": "70/15/15",
+    "stratified_by": "channel+class"
+  }
+}

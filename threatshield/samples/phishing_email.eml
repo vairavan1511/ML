@@ -1,0 +1,20 @@
+From: security-alert@sbi-verify.xyz
+To: victim@example.com
+Subject: URGENT: Your SBI account has been suspended
+Date: Mon, 01 Jan 2024 10:00:00 +0000
+Message-ID: <phish001@sbi-verify.xyz>
+Reply-To: collect@attacker-domain.top
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Received-SPF: fail (sbi-verify.xyz: domain does not designate permitted senders)
+
+<html><body>
+<p>Dear Customer,</p>
+<p>Your SBI account has been <b>SUSPENDED</b> due to suspicious activity.</p>
+<p>You must verify your KYC immediately to avoid permanent account closure.</p>
+<p>Click here to verify: <a href="http://sbi-kyc.xyz/verify?redirect=http://evil.top/steal">
+http://www.sbi.co.in/verify
+</a></p>
+<p>Failure to act within 24 hours will result in legal action.</p>
+<p>Share your OTP with our agent: Call +91-9999999999</p>
+</body></html>
