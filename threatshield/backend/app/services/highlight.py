@@ -39,11 +39,12 @@ def get_highlights(text: str) -> list[str]:
         found.add(m.group(0))
 
     # Top spam terms from model
+    # Whole-word matches only, and short terms are skipped, so "our" never highlights "your"
     for term in _load_spam_terms():
-        if term in text.lower():
-            # Find original-case version
-            idx = text.lower().find(term)
-            found.add(text[idx: idx + len(term)])
+        if len(term) < 3:
+            continue
+        for m in re.finditer(rf"(?<!\w){re.escape(term)}(?!\w)", text, re.I):
+            found.add(m.group(0))
 
     # URLs are always highlighted
     for m in URL_RE.finditer(text):

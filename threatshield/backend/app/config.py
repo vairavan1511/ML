@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     # Artifact paths
     artifacts_dir: Path = Path(__file__).parent.parent.parent / "ml" / "artifacts"
 
+    # Optional offline GeoIP database (MaxMind GeoLite2-City.mmdb, obtained by the user)
+    geolite_city_path: Path | None = None
+
     # Scoring weights (must sum to 1.0 per channel)
     email_weight_ml: float = 0.55
     email_weight_url: float = 0.20

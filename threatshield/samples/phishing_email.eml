@@ -1,3 +1,7 @@
+X-Synthetic-Sample: true (training-free demo data; IP addresses are placeholders)
+Received: from unknown (unknown [45.76.10.25]) by mx.relay.example with ESMTP id 3b2; Mon, 01 Jan 2024 10:00:00 +0000
+Received: from mx.relay.example (mx.relay.example [198.51.100.9]) by mx.receiver.example with ESMTPS id 7a1; Mon, 01 Jan 2024 10:00:03 +0000
+Authentication-Results: mx.receiver.example; spf=fail smtp.mailfrom=sbi-verify.xyz; dkim=none; dmarc=fail (p=REJECT) header.from=sbi-verify.xyz
 From: security-alert@sbi-verify.xyz
 To: victim@example.com
 Subject: URGENT: Your SBI account has been suspended

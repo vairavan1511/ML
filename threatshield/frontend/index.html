@@ -3,675 +3,1133 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ThreatShield</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>tailwind.config = { darkMode: 'class' };</script>
+  <title>ThreatShield · AI-Powered Email and SMS Threat Detection, GeoLocation and Forensic Intelligence Platform</title>
+  <meta name="description" content="Explainable email and SMS threat detection with header forensics, sender geolocation and Link Shield.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
   <style>
-    #gaugeArc { transition: stroke-dashoffset 0.8s ease; }
+    /* ── Design tokens ───────────────────────────────────────────── */
+    :root {
+      --bg: #f5f7fb; --surface: #ffffff; --surface-2: #f0f3f9; --border: #dfe5ef;
+      --text: #111827; --muted: #5b6678; --accent: #2456d4; --accent-ink: #ffffff;
+      --safe: #15803d; --safe-bg: #e7f6ec;
+      --warn: #b45309; --warn-bg: #fdf3e2;
+      --danger: #b91c1c; --danger-bg: #fdeaea;
+      --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 4px 16px rgba(16, 24, 40, .06);
+      --radius: 14px; --radius-sm: 10px;
+      color-scheme: light;
+    }
+    :root[data-theme="dark"] {
+      --bg: #0b1220; --surface: #121a2b; --surface-2: #17213a; --border: #243150;
+      --text: #e6ebf5; --muted: #9aa6bd; --accent: #7ea2ff; --accent-ink: #0b1220;
+      --safe: #4ade80; --safe-bg: #0f2a1d;
+      --warn: #fbbf24; --warn-bg: #2b200c;
+      --danger: #f87171; --danger-bg: #2c1316;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 22px rgba(0, 0, 0, .35);
+      color-scheme: dark;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0b1220; --surface: #121a2b; --surface-2: #17213a; --border: #243150;
+        --text: #e6ebf5; --muted: #9aa6bd; --accent: #7ea2ff; --accent-ink: #0b1220;
+        --safe: #4ade80; --safe-bg: #0f2a1d;
+        --warn: #fbbf24; --warn-bg: #2b200c;
+        --danger: #f87171; --danger-bg: #2c1316;
+        --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 22px rgba(0, 0, 0, .35);
+        color-scheme: dark;
+      }
+    }
+
+    /* ── Base ────────────────────────────────────────────────────── */
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      background: var(--bg); color: var(--text);
+      font: 15px/1.55 Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    h1, h2, h3 { margin: 0; line-height: 1.25; letter-spacing: -0.01em; }
+    h2 { font-size: 1.05rem; font-weight: 650; }
+    h3 { font-size: .95rem; font-weight: 600; }
+    p { margin: 0; }
+    code, .mono { font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; font-size: .92em; }
+    .muted { color: var(--muted); }
+    .small { font-size: .85rem; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    :focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 2px; border-radius: 6px; }
+
+    .container { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+    .skip { position: absolute; left: 16px; top: -48px; background: var(--accent); color: var(--accent-ink); padding: 8px 12px; border-radius: 8px; z-index: 50; }
+    .skip:focus { top: 12px; }
+
+    /* ── Header ──────────────────────────────────────────────────── */
+    header.site {
+      position: sticky; top: 0; z-index: 20;
+      background: color-mix(in srgb, var(--surface) 88%, transparent);
+      backdrop-filter: saturate(1.4) blur(10px);
+      border-bottom: 1px solid var(--border);
+    }
+    .bar { display: flex; align-items: center; gap: 16px; min-height: 64px; flex-wrap: wrap; padding: 8px 0; }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-mark {
+      width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+      background: linear-gradient(135deg, #2456d4, #0ea5e9); color: #fff;
+    }
+    .brand-name { font-weight: 700; font-size: 1.05rem; }
+    .brand-sub { font-size: .78rem; color: var(--muted); }
+    .nav { display: flex; gap: 4px; margin-left: auto; background: var(--surface-2); padding: 4px; border-radius: 12px; border: 1px solid var(--border); }
+    .nav button {
+      border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 600;
+      padding: 8px 14px; border-radius: 9px; cursor: pointer;
+    }
+    .nav button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+    .icon-btn {
+      border: 1px solid var(--border); background: var(--surface); color: var(--text);
+      width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; cursor: pointer;
+    }
+
+    /* ── Layout ──────────────────────────────────────────────────── */
+    main { padding: 24px 0 56px; }
+    .hero { display: grid; gap: 8px; margin-bottom: 20px; }
+    .hero p { color: var(--muted); max-width: 70ch; }
+    .grid-2 { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
+    .grid-3 { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+    @media (min-width: 900px) {
+      .grid-2 { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); align-items: start; }
+      .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 20px; min-width: 0;
+    }
+    .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+    .stack > * + * { margin-top: 14px; }
+    .section { margin-top: 20px; }
+
+    /* ── Inputs ──────────────────────────────────────────────────── */
+    .seg { display: inline-flex; gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 11px; border: 1px solid var(--border); flex-wrap: wrap; }
+    .seg button {
+      border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 600; font-size: .9rem;
+      padding: 7px 14px; border-radius: 8px; cursor: pointer;
+    }
+    .seg button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+    label.field { display: grid; gap: 6px; font-weight: 550; font-size: .9rem; }
+    input[type="text"], input[type="url"], textarea, select {
+      width: 100%; font: inherit; color: var(--text); background: var(--surface-2);
+      border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 11px 12px;
+    }
+    textarea { min-height: 220px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .86rem; line-height: 1.5; }
+    input:focus, textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); border-color: var(--accent); }
+    .drop {
+      border: 1.5px dashed var(--border); border-radius: var(--radius-sm); padding: 14px; background: var(--surface-2);
+      display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; font-size: .9rem;
+    }
+    .btn {
+      font: inherit; font-weight: 650; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+      padding: 10px 16px; border-radius: 10px; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; justify-content: center; text-decoration: none;
+    }
+    .btn:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+    .btn-primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+    .btn-primary:hover { filter: brightness(1.06); }
+    .btn-primary:disabled { opacity: .6; cursor: progress; }
+    .btn-danger { background: var(--danger); color: #fff; border-color: transparent; }
+    .btn-ghost { background: transparent; }
+    .btn-block { width: 100%; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
+
+    /* ── Badges, chips ───────────────────────────────────────────── */
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px; font-size: .78rem; font-weight: 650;
+      padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); color: var(--muted);
+      white-space: nowrap;
+    }
+    .pill.ok { color: var(--safe); background: var(--safe-bg); border-color: transparent; }
+    .pill.warn { color: var(--warn); background: var(--warn-bg); border-color: transparent; }
+    .pill.bad { color: var(--danger); background: var(--danger-bg); border-color: transparent; }
+    .pill.neutral { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-color: transparent; }
+    .verdict { font-weight: 800; font-size: clamp(1.6rem, 4vw, 2.2rem); letter-spacing: .01em; }
+    .verdict-box { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+    .verdict-box.ok .verdict { color: var(--safe); }
+    .verdict-box.warn .verdict { color: var(--warn); }
+    .verdict-box.bad .verdict { color: var(--danger); }
+    .gauge { width: 132px; height: 132px; position: relative; flex: 0 0 auto; }
+    .gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .gauge .track { stroke: var(--surface-2); }
+    .gauge .value { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+    .gauge .value b { font-size: 1.9rem; line-height: 1; }
+    .gauge .value span { font-size: .72rem; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+    .reasons { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+    .reasons li {
+      display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: start;
+      padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-2); font-size: .93rem;
+    }
+    .reasons .dot { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; background: var(--danger-bg); color: var(--danger); font-weight: 700; font-size: .8rem; }
+    .reasons.ok .dot { background: var(--safe-bg); color: var(--safe); }
+    .advice h3 { margin-bottom: 8px; }
+    .advice ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+    .highlights { display: flex; flex-wrap: wrap; gap: 6px; }
+    .hl { background: var(--warn-bg); color: var(--warn); border-radius: 6px; padding: 2px 8px; font-size: .85rem; font-weight: 600; }
+
+    /* ── Link Shield ─────────────────────────────────────────────── */
+    .shield { display: grid; gap: 10px; }
+    .lock-chip {
+      display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+      border: 1px dashed var(--border); background: var(--surface-2); color: var(--text);
+      border-radius: 10px; padding: 10px 12px; font: inherit; cursor: pointer;
+    }
+    .lock-chip:hover { border-color: var(--muted); }
+    .lock-chip code { overflow-wrap: anywhere; flex: 1 1 auto; min-width: 0; }
+    .lock-chip .lvl { flex: 0 0 auto; }
+    .note {
+      display: flex; gap: 10px; align-items: flex-start; font-size: .88rem; color: var(--muted);
+      background: var(--surface-2); border-radius: 10px; padding: 10px 12px;
+    }
+    dialog.shield-modal {
+      border: 1px solid var(--border); border-radius: 16px; padding: 0; width: min(560px, calc(100vw - 32px));
+      background: var(--surface); color: var(--text); box-shadow: 0 24px 60px rgba(0, 0, 0, .35);
+    }
+    dialog.shield-modal::backdrop { background: rgba(10, 15, 25, .55); }
+    .modal-head { padding: 18px 20px; border-bottom: 1px solid var(--border); display: flex; gap: 12px; align-items: center; }
+    .modal-body { padding: 18px 20px; display: grid; gap: 14px; }
+    .modal-foot { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+    .modal-head.high { background: var(--danger-bg); }
+    .modal-head.medium { background: var(--warn-bg); }
+    .modal-head.low { background: var(--surface-2); }
+    .countdown { font-variant-numeric: tabular-nums; font-weight: 700; }
+    .open-link { color: var(--accent); font-weight: 650; word-break: break-all; }
+
+    /* ── Tables, timeline ────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+    table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--surface-2); }
+    tr:last-child td { border-bottom: 0; }
+    td.wrap, .wrap { overflow-wrap: anywhere; }
+    .bar-track { height: 6px; background: var(--surface-2); border-radius: 999px; overflow: hidden; min-width: 80px; }
+    .bar-fill { height: 100%; background: var(--danger); }
+
+    .kv { display: grid; grid-template-columns: minmax(96px, auto) minmax(0, 1fr); gap: 8px 14px; font-size: .92rem; }
+    .kv dt { color: var(--muted); }
+    .kv dd { margin: 0; overflow-wrap: anywhere; }
+
+    .preview { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; background: #fff; }
+    .preview iframe { width: 100%; min-height: 260px; border: 0; display: block; background: #fff; }
+    .banner { font-size: .85rem; padding: 8px 12px; background: var(--warn-bg); color: var(--warn); font-weight: 600; }
+
+    .map { height: 300px; border-radius: var(--radius-sm); border: 1px solid var(--border); overflow: hidden; background: var(--surface-2); }
+    .map-note { font-size: .88rem; color: var(--muted); margin-top: 10px; }
+
+    .error { border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent); background: var(--danger-bg); color: var(--danger); border-radius: var(--radius-sm); padding: 12px 14px; font-weight: 550; }
+    .empty { text-align: center; padding: 36px 20px; color: var(--muted); }
+    .empty svg { width: 46px; height: 46px; opacity: .7; margin-bottom: 8px; }
+    .spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .8s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .skeleton { background: linear-gradient(90deg, var(--surface-2), var(--border), var(--surface-2)); background-size: 200% 100%; animation: shimmer 1.2s infinite; border-radius: 10px; height: 14px; }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    .metric-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    @media (min-width: 720px) { .metric-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+    .metric { background: var(--surface-2); border-radius: var(--radius-sm); padding: 14px; }
+    .metric .label { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+    .metric .num { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 4px; }
+
+    footer.site-foot { border-top: 1px solid var(--border); padding: 18px 0; color: var(--muted); font-size: .85rem; }
+
+    [hidden] { display: none !important; }
+    @media (max-width: 520px) {
+      .container { padding: 0 16px; }
+      .nav { margin-left: 0; width: 100%; }
+      .nav button { flex: 1 1 auto; }
+      .card { padding: 16px; }
+      .gauge { width: 110px; height: 110px; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-200 min-h-screen">
-<div class="max-w-4xl mx-auto px-4 py-6 space-y-6">
+<body>
+  <button type="button" class="skip" id="skipLink">Skip to content</button>
 
-  <header class="flex items-center justify-between gap-3">
-    <div>
-      <h1 class="text-2xl font-bold">ThreatShield</h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400">Email and SMS threat detection with explainable verdicts</p>
-    </div>
-    <button id="btnTheme" type="button" class="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-sm">Light / Dark</button>
-  </header>
-
-  <nav class="flex gap-2">
-    <button type="button" data-tab="email" class="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium">Email</button>
-    <button type="button" data-tab="sms" class="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium">SMS</button>
-    <button type="button" data-tab="url" class="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-medium">URL</button>
-  </nav>
-
-  <!-- Email panel -->
-  <section id="panelEmail" class="space-y-3">
-    <div id="dropzone" class="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-4 text-center text-sm text-slate-500 dark:text-slate-400">
-      Drop an .eml or .txt file here, or
-      <label class="underline cursor-pointer">browse<input id="emailFile" type="file" accept=".eml,.txt" class="hidden"></label>
-    </div>
-    <textarea id="emailText" rows="8" placeholder="Or paste raw email source here" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-sm font-mono"></textarea>
-    <div class="flex flex-wrap gap-2 items-center">
-      <button type="button" data-sample="email" class="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-sm">Try a sample (synthetic phishing email)</button>
-      <button id="btnAnalyzeEmail" type="button" class="analyze-btn px-5 py-2 rounded-lg bg-emerald-600 text-white font-semibold disabled:opacity-50">Analyze</button>
-    </div>
-  </section>
-
-  <!-- SMS panel -->
-  <section id="panelSms" class="hidden space-y-3">
-    <input id="smsSender" type="text" placeholder="Sender ID (optional, e.g. SBIBNK)" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-sm">
-    <textarea id="smsText" rows="5" placeholder="Paste the SMS text here" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-sm"></textarea>
-    <div class="flex flex-wrap gap-2 items-center">
-      <button type="button" data-sample="sms" class="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-sm">Try a sample (synthetic OTP scam)</button>
-      <button id="btnAnalyzeSms" type="button" class="analyze-btn px-5 py-2 rounded-lg bg-emerald-600 text-white font-semibold disabled:opacity-50">Analyze</button>
-    </div>
-  </section>
-
-  <!-- URL panel -->
-  <section id="panelUrl" class="hidden space-y-3">
-    <input id="inputUrl" type="text" placeholder="Paste a link to check (it is never opened)" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-sm">
-    <div class="flex flex-wrap gap-2 items-center">
-      <button type="button" data-sample="url" class="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-sm">Try a sample (synthetic link)</button>
-      <button id="btnAnalyzeUrl" type="button" class="analyze-btn px-5 py-2 rounded-lg bg-emerald-600 text-white font-semibold disabled:opacity-50">Analyze</button>
-    </div>
-  </section>
-
-  <p class="text-xs text-slate-500 dark:text-slate-400">Sample messages are synthetic. Message links are shown as defanged text only and are never opened.</p>
-
-  <div id="loader" class="hidden animate-pulse space-y-2">
-    <div class="h-8 w-40 rounded bg-slate-200 dark:bg-slate-800"></div>
-    <div class="h-4 w-full rounded bg-slate-200 dark:bg-slate-800"></div>
-    <div class="h-4 w-3/4 rounded bg-slate-200 dark:bg-slate-800"></div>
-  </div>
-
-  <div id="error" class="hidden rounded-lg border border-red-300 bg-red-50 dark:bg-red-900/20 dark:border-red-800 p-3 text-sm text-red-700 dark:text-red-300"></div>
-
-  <!-- Result card -->
-  <section id="result" class="hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-5">
-    <div class="flex flex-col sm:flex-row gap-6 items-center">
-      <div class="relative w-32 h-32 shrink-0">
-        <svg viewBox="0 0 120 120" class="w-32 h-32 -rotate-90">
-          <circle cx="60" cy="60" r="52" fill="none" stroke="#e2e8f0" stroke-width="10" class="dark:stroke-slate-700"></circle>
-          <circle id="gaugeArc" cx="60" cy="60" r="52" fill="none" stroke="#64748b" stroke-width="10" stroke-linecap="round"></circle>
-        </svg>
-        <div class="absolute inset-0 flex flex-col items-center justify-center">
-          <span id="gaugeValue" class="text-3xl font-bold">0</span>
-          <span class="text-xs text-slate-500 dark:text-slate-400">risk / 100</span>
+  <header class="site">
+    <div class="container bar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.4-7 10-4-1.6-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
+        </div>
+        <div>
+          <div class="brand-name">ThreatShield</div>
+          <div class="brand-sub">Email and SMS threat detection · Geolocation · Forensic intelligence</div>
         </div>
       </div>
-      <div class="space-y-2 text-center sm:text-left">
-        <span id="verdictBadge" class="inline-block px-4 py-2 rounded-full text-lg font-bold text-white">-</span>
-        <p id="channelLine" class="text-sm text-slate-500 dark:text-slate-400"></p>
+      <nav class="nav" role="tablist" aria-label="Sections">
+        <button type="button" role="tab" id="tab-analyze" aria-controls="view-analyze" aria-selected="true" data-view="analyze">Analyze</button>
+        <button type="button" role="tab" id="tab-model" aria-controls="view-model" aria-selected="false" data-view="model">Model and accuracy</button>
+      </nav>
+      <button type="button" class="icon-btn" id="themeToggle" aria-label="Switch light or dark theme" title="Switch theme">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main" class="container">
+    <!-- ═════════════════════ ANALYZE VIEW ═════════════════════ -->
+    <section id="view-analyze" role="tabpanel" aria-labelledby="tab-analyze">
+      <div class="hero">
+        <h1>Check a message before you act on it</h1>
+        <p>Paste or upload an email or text message. ThreatShield returns a verdict, the reasons behind it, the sender's header trail and a map of the origin. Links are locked and are never opened automatically.</p>
       </div>
-    </div>
 
-    <div>
-      <a id="downloadReport" class="hidden inline-block rounded-lg bg-slate-700 px-4 py-2 text-sm font-semibold text-white dark:bg-slate-600">Download report</a>
-    </div>
+      <div class="grid-2">
+        <!-- Input card -->
+        <div class="card">
+          <div class="card-head">
+            <div class="seg" role="tablist" aria-label="Message type">
+              <button type="button" role="tab" id="in-email" aria-controls="panel-email" aria-selected="true" data-kind="email">Email</button>
+              <button type="button" role="tab" id="in-sms" aria-controls="panel-sms" aria-selected="false" data-kind="sms">SMS</button>
+              <button type="button" role="tab" id="in-url" aria-controls="panel-url" aria-selected="false" data-kind="url">URL</button>
+            </div>
+            <button type="button" class="btn btn-ghost small" id="sampleBtn">Try a sample</button>
+          </div>
 
-    <section id="adviceCard" class="hidden rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/40">
-      <h3 class="font-semibold mb-1">What should I do now?</h3>
-      <p id="adviceTitle" class="font-medium mb-2"></p>
-      <ul id="adviceSteps" class="list-disc pl-5 space-y-1 text-sm"></ul>
+          <form id="analyzeForm" novalidate>
+            <div id="panel-email" role="tabpanel" aria-labelledby="in-email" class="stack">
+              <label class="field" for="emailText">Raw email source (headers and body)
+                <textarea id="emailText" spellcheck="false" placeholder="Paste the full message source, including the headers."></textarea>
+              </label>
+              <div class="drop">
+                <span class="muted">or upload an .eml or .txt file (5 MB max)</span>
+                <input type="file" id="emailFile" accept=".eml,.txt" aria-label="Upload an email file">
+              </div>
+            </div>
+
+            <div id="panel-sms" role="tabpanel" aria-labelledby="in-sms" class="stack" hidden>
+              <label class="field" for="smsText">Message text
+                <textarea id="smsText" style="min-height:160px" placeholder="Paste the SMS or chat message."></textarea>
+              </label>
+              <label class="field" for="smsSender">Sender ID (optional)
+                <input type="text" id="smsSender" maxlength="40" placeholder="for example, VK-SBIBNK">
+              </label>
+            </div>
+
+            <div id="panel-url" role="tabpanel" aria-labelledby="in-url" class="stack" hidden>
+              <label class="field" for="urlText">Link to check
+                <input type="text" id="urlText" placeholder="https://example.com/verify" autocomplete="off" spellcheck="false">
+              </label>
+              <p class="note">The link is analysed from its text only. It is never visited or loaded.</p>
+            </div>
+
+            <div class="actions">
+              <button type="submit" class="btn btn-primary" id="analyzeBtn">Analyze</button>
+              <button type="button" class="btn btn-ghost" id="clearBtn">Clear</button>
+            </div>
+          </form>
+          <div id="formError" class="error section" role="alert" hidden></div>
+        </div>
+
+        <!-- Status card (empty state, loading, verdict summary) -->
+        <div class="card" id="summaryCard" aria-live="polite">
+          <div class="empty" id="emptyState">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.4-7 10-4-1.6-7-5.5-7-10V6l7-3z"/></svg>
+            <h2>No result yet</h2>
+            <p class="small" style="margin-top:6px">Your verdict, reasons and forensic details will appear here.</p>
+          </div>
+          <div id="loadingState" hidden>
+            <div class="stack">
+              <div class="skeleton" style="width:40%"></div>
+              <div class="skeleton" style="width:70%;height:34px"></div>
+              <div class="skeleton" style="width:90%"></div>
+              <div class="skeleton" style="width:80%"></div>
+              <div class="skeleton" style="width:60%"></div>
+            </div>
+          </div>
+          <div id="summaryState" hidden>
+            <div class="verdict-box" id="verdictBox">
+              <div class="gauge" aria-hidden="true">
+                <svg viewBox="0 0 120 120">
+                  <circle class="track" cx="60" cy="60" r="50" fill="none" stroke-width="12"></circle>
+                  <circle id="gaugeArc" cx="60" cy="60" r="50" fill="none" stroke-width="12" stroke-linecap="round" stroke="currentColor" stroke-dasharray="314" stroke-dashoffset="314"></circle>
+                </svg>
+                <div class="value"><div><b id="gaugeValue">0</b><br><span>risk</span></div></div>
+              </div>
+              <div>
+                <div class="small muted" id="channelLabel">Channel</div>
+                <div class="verdict" id="verdictText">SAFE</div>
+                <div class="actions" style="margin-top:8px" id="summaryPills"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div id="results" hidden>
+        <div class="grid-2 section">
+          <div class="card">
+            <div class="card-head"><h2>Why this verdict</h2><span class="small muted" id="caseLabel"></span></div>
+            <ul class="reasons" id="reasonList"></ul>
+          </div>
+          <div class="card advice" id="adviceCard">
+            <div class="card-head"><h2 id="adviceTitle">Guidance</h2></div>
+            <ul id="adviceList"></ul>
+            <div class="actions">
+              <a class="btn" id="reportLink" href="#" download>Download PDF report</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="section" id="highlightsBlock">
+          <div class="card">
+            <div class="card-head"><h2>Suspicious words</h2></div>
+            <div class="highlights" id="highlightList"></div>
+          </div>
+        </div>
+
+        <div class="section" id="shieldBlock">
+          <div class="card">
+            <div class="card-head">
+              <h2>Link Shield</h2>
+              <span class="small muted">Links are locked. Select one to read the risk before any action.</span>
+            </div>
+            <div class="shield" id="shieldList"></div>
+          </div>
+        </div>
+
+        <div class="section grid-2" id="emailBlock">
+          <div class="card">
+            <div class="card-head"><h2>Message details</h2></div>
+            <dl class="kv" id="detailsList"></dl>
+            <div class="section">
+              <h3 style="margin-bottom:8px">Sender authentication (as stated in the message)</h3>
+              <div class="actions" style="margin-top:0" id="authChips"></div>
+            </div>
+            <div class="section" id="attachBlock">
+              <h3 style="margin-bottom:8px">Attachments</h3>
+              <div class="table-wrap"><table><thead><tr><th>File</th><th>Type</th><th>Size</th><th>SHA-256</th></tr></thead><tbody id="attachBody"></tbody></table></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>Email preview</h2></div>
+            <div class="preview">
+              <div class="banner">Links and images disabled for your safety</div>
+              <iframe id="emailPreviewFrame" sandbox="" referrerpolicy="no-referrer" title="Sanitised email body"></iframe>
+            </div>
+          </div>
+        </div>
+
+        <div class="section" id="forensicsBlock">
+          <div class="card-head" style="margin:0 0 12px"><h2>Header forensics and origin</h2></div>
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-head">
+                <h3>Origin</h3>
+                <span class="pill" id="originConfidence">Confidence: n/a</span>
+              </div>
+              <dl class="kv" id="originList"></dl>
+              <p class="note section" id="originReason"></p>
+            </div>
+            <div class="card">
+              <div class="card-head"><h3>Map of origin</h3></div>
+              <div class="map" id="geoMap" aria-label="Map of the origin location"></div>
+              <p class="map-note" id="geoNote"></p>
+            </div>
+          </div>
+
+          <div class="card section">
+            <div class="card-head"><h3>Received chain (oldest hop first)</h3></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Hop</th><th>From</th><th>By</th><th>IP</th><th>Time (UTC)</th><th>Delay</th><th>Note</th></tr></thead>
+                <tbody id="hopBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card section">
+            <div class="card-head"><h3>Checks</h3></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Type</th><th>Finding</th><th style="width:140px">Weight</th></tr></thead>
+                <tbody id="findingBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
 
-    <div>
-      <h3 class="font-semibold mb-2">Why?</h3>
-      <ul id="reasons" class="list-disc pl-5 space-y-1 text-sm"></ul>
-    </div>
-
-    <div>
-      <h3 class="font-semibold mb-2">Suspicious words</h3>
-      <div id="highlights" class="flex flex-wrap gap-2 text-sm"></div>
-    </div>
-
-    <div>
-      <h3 class="font-semibold mb-2">Links</h3>
-      <div id="urls" class="flex flex-wrap gap-2 text-sm font-mono"></div>
-    </div>
-
-    <section id="emailPreviewSection" class="hidden border-t border-slate-100 dark:border-slate-800 pt-4">
-      <button id="previewToggle" type="button" class="font-semibold" aria-expanded="false" aria-controls="emailPreviewContent">Preview email body</button>
-      <div id="emailPreviewContent" class="hidden mt-3">
-        <p class="mb-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">Links and images disabled for your safety</p>
-        <iframe id="emailPreviewFrame" sandbox="" referrerpolicy="no-referrer" title="Sanitized email body" class="w-full min-h-64 rounded border border-slate-300 bg-white dark:border-slate-700"></iframe>
+    <!-- ═════════════════════ MODEL VIEW ═════════════════════ -->
+    <section id="view-model" role="tabpanel" aria-labelledby="tab-model" hidden>
+      <div class="hero">
+        <h1>Model and accuracy</h1>
+        <p>Every number on this page is read from the saved evaluation run (<code>ml/artifacts/metrics.json</code>). Nothing is typed in by hand. If a value is missing it says so.</p>
+      </div>
+      <div id="modelStatus" class="card"><div class="skeleton" style="width:50%"></div></div>
+      <div id="modelBody" hidden>
+        <div class="card">
+          <div class="card-head"><h2 id="modelName">Best model</h2><span class="pill neutral">Held-out test set</span></div>
+          <div class="metric-grid" id="modelMetrics"></div>
+        </div>
+        <div class="grid-2 section">
+          <div class="card">
+            <div class="card-head"><h2>Results by channel</h2></div>
+            <div class="table-wrap"><table><thead><tr><th>Channel</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>ROC-AUC</th></tr></thead><tbody id="channelBody"></tbody></table></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>Confusion matrix (test set)</h2></div>
+            <div id="confusionBox"></div>
+          </div>
+        </div>
+        <div class="grid-2 section">
+          <div class="card">
+            <div class="card-head"><h2>Model comparison (validation set)</h2></div>
+            <div class="table-wrap"><table><thead><tr><th>Model</th><th>F1</th><th>ROC-AUC</th><th>Train time</th></tr></thead><tbody id="compareBody"></tbody></table></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>Dataset and limitations</h2></div>
+            <dl class="kv" id="datasetList"></dl>
+            <p class="note section" id="limitNote"></p>
+          </div>
+        </div>
+        <div class="grid-2 section">
+          <div class="card"><div class="card-head"><h2>Terms that point to spam</h2></div><div class="highlights" id="spamTerms"></div></div>
+          <div class="card"><div class="card-head"><h2>Terms that point to legitimate mail</h2></div><div class="highlights" id="hamTerms"></div></div>
+        </div>
       </div>
     </section>
+  </main>
 
-    <div>
-      <h3 class="font-semibold mb-2">Details</h3>
-      <dl id="details" class="text-sm divide-y divide-slate-100 dark:divide-slate-800"></dl>
+  <footer class="site-foot">
+    <div class="container">
+      ThreatShield is a student project. Analysis is static, reads only the message content and headers, and never visits a link.
+      Geolocation is approximate and needs a locally installed GeoLite2 database. VPNs, Tor and relays hide the true origin.
     </div>
-  </section>
+  </footer>
 
-  <div id="linkShieldModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="linkShieldTitle">
-    <div class="w-full max-w-lg rounded-lg border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-900">
-      <h2 id="linkShieldTitle" class="text-lg font-semibold">Link Shield</h2>
-      <p id="linkShieldUrl" class="mt-3 break-all rounded bg-slate-100 p-3 font-mono text-sm dark:bg-slate-800"></p>
-      <p class="mt-3 text-sm">Risk level: <strong id="linkShieldLevel"></strong></p>
-      <div class="mt-3">
-        <h3 class="text-sm font-semibold">Reasons</h3>
-        <ul id="linkShieldReasons" class="mt-1 list-disc space-y-1 pl-5 text-sm"></ul>
+  <!-- Link Shield modal -->
+  <dialog class="shield-modal" id="shieldModal" aria-labelledby="shieldTitle">
+    <div class="modal-head" id="shieldHead">
+      <span class="pill" id="shieldLevel"></span>
+      <h2 id="shieldTitle">Link check</h2>
+    </div>
+    <div class="modal-body">
+      <div>
+        <div class="small muted">Defanged link (safe to read)</div>
+        <code class="mono wrap" id="shieldDefanged"></code>
       </div>
-      <div id="linkShieldConfirmation" class="hidden mt-4 space-y-2">
-        <p id="linkShieldCountdown" class="text-sm" aria-live="polite"></p>
-        <label for="linkShieldDomain" class="block text-sm">Type the link's domain to confirm</label>
-        <input id="linkShieldDomain" type="text" autocomplete="off" spellcheck="false" class="w-full rounded border border-slate-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+      <ul class="reasons" id="shieldReasons"></ul>
+      <div id="shieldMediumBlock" hidden>
+        <p class="small" id="shieldWait"></p>
+        <label class="field" for="shieldTypeDomain" style="margin-top:10px">Type the domain <span class="mono" id="shieldDomainHint"></span> to confirm
+          <input type="text" id="shieldTypeDomain" autocomplete="off" spellcheck="false">
+        </label>
       </div>
-      <p id="linkShieldCopyStatus" class="mt-2 min-h-5 text-xs text-slate-500 dark:text-slate-400" aria-live="polite"></p>
-      <div class="mt-4 flex flex-wrap justify-end gap-2">
-        <button id="linkShieldCopy" type="button" class="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-700">Copy defanged link</button>
-        <button id="linkShieldOpen" type="button" class="hidden rounded bg-emerald-600 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">Open in new tab</button>
-        <button id="linkShieldClose" type="button" class="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-700">Close</button>
-      </div>
+      <div id="shieldOpenWrap" hidden></div>
     </div>
-  </div>
-
-  <!-- Model and accuracy -->
-  <section id="modelInfo" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
-    <div class="flex items-center justify-between gap-3">
-      <h2 class="text-lg font-semibold">Model and Accuracy</h2>
-      <span class="text-sm text-slate-500 dark:text-slate-400">Best model: <span id="bestModel">not available</span></span>
+    <div class="modal-foot">
+      <button type="button" class="btn" id="shieldCopy">Copy defanged link</button>
+      <button type="button" class="btn" id="shieldClose">Close</button>
     </div>
-    <p id="modelError" class="text-sm text-red-600 dark:text-red-400"></p>
+  </dialog>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div class="border border-slate-200 dark:border-slate-800 rounded-lg p-3">
-        <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Overall test metrics</h4>
-        <table class="w-full text-sm"><tbody id="miOverall" class="divide-y divide-slate-100 dark:divide-slate-800"></tbody></table>
-      </div>
-      <div class="border border-slate-200 dark:border-slate-800 rounded-lg p-3">
-        <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Per channel (test)</h4>
-        <table class="w-full text-sm"><tbody id="miChannel" class="divide-y divide-slate-100 dark:divide-slate-800"></tbody></table>
-      </div>
-    </div>
+  <div id="toast" role="status" aria-live="polite" style="position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 14px;border-radius:10px;font-weight:600;font-size:.9rem;opacity:0;transition:opacity .2s;pointer-events:none;"></div>
 
-    <div class="border border-slate-200 dark:border-slate-800 rounded-lg p-3">
-      <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Model comparison (validation)</h4>
-      <table class="w-full text-sm"><tbody id="miComparison" class="divide-y divide-slate-100 dark:divide-slate-800"></tbody></table>
-    </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script>
+  (() => {
+    'use strict';
 
-    <div class="border border-slate-200 dark:border-slate-800 rounded-lg p-3">
-      <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Dataset sizes</h4>
-      <table class="w-full text-sm"><tbody id="miDataset" class="divide-y divide-slate-100 dark:divide-slate-800"></tbody></table>
-    </div>
+    // ── Helpers ────────────────────────────────────────────────────
+    const $ = (id) => document.getElementById(id);
 
-    <p class="text-xs text-slate-500 dark:text-slate-400">Public datasets are older and mostly English. The India supplement is synthetic and used for training only.</p>
-  </section>
-
-</div>
-
-<script>
-(function () {
-  'use strict';
-  const $ = (id) => document.getElementById(id);
-  const NA = 'not available';
-  const CIRC = 2 * Math.PI * 52;
-  const THEME_KEY = 'threatshield-theme';
-  const TONE_BG = { safe: 'bg-emerald-600', warn: 'bg-amber-500', danger: 'bg-red-600' };
-  const TONE_HEX = { safe: '#10b981', warn: '#f59e0b', danger: '#ef4444' };
-  const VERDICT_TONE = { 'SAFE': 'safe', 'SUSPICIOUS': 'warn', 'SPAM-PHISHING': 'danger' };
-  const LEVEL_TONE = { 'LOW': 'safe', 'MEDIUM': 'warn', 'HIGH': 'danger' };
-  let realUrl = '';
-  let activeDefangedUrl = '';
-  let activeDomain = '';
-  let modalCountdownTimer = null;
-  let modalReturnFocus = null;
-  const SAMPLES = {
-    email: `From: security-alert@sbi-verify.xyz
-To: victim@example.com
-Subject: URGENT: Your SBI account has been suspended
-Date: Mon, 01 Jan 2024 10:00:00 +0000
-Message-ID: <phish001@sbi-verify.xyz>
-Reply-To: collect@attacker-domain.top
-MIME-Version: 1.0
-Content-Type: text/html; charset=utf-8
-Received-SPF: fail (sbi-verify.xyz: domain does not designate permitted senders)
-
-<html><body>
-<p>Dear Customer,</p>
-<p>Your SBI account has been <b>SUSPENDED</b> due to suspicious activity.</p>
-<p>You must verify your KYC immediately to avoid permanent account closure.</p>
-<p>Click here to verify: \x3ca href="http://sbi-kyc.xyz/verify?redirect=http://evil.top/steal">
-http://www.sbi.co.in/verify
-\x3c/a></p>
-<p>Failure to act within 24 hours will result in legal action.</p>
-<p>Share your OTP with our agent: Call +91-9999999999</p>
-</body></html>`,
-    sms: 'Dear customer, your SBI KYC is expired. Share the OTP sent to your phone or your account will be blocked today. Call 9999999999 now.',
-    url: 'http://sbi-kyc.xyz/verify?redirect=http://evil.top/steal'
-  };
-
-  /* ---------- helpers (all message text goes through textContent) ---------- */
-  function setText(el, t) { el.textContent = (t === null || t === undefined) ? '' : String(t); }
-  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
-  function fmtPct(v) { const n = Number(v); return (v === null || v === undefined || isNaN(n)) ? NA : (n * 100).toFixed(1) + '%'; }
-  function fmtMetric(key, v) {
-    if (v === null || v === undefined) return NA;
-    if (typeof v === 'object') return JSON.stringify(v).slice(0, 300);
-    if (typeof v === 'number' && /accuracy|precision|recall|f1|roc/i.test(key)) return fmtPct(v);
-    return String(v);
-  }
-  function detailText(d) {
-    if (!d || !d.detail) return '';
-    return Array.isArray(d.detail) ? d.detail.map((x) => x.msg).join('; ') : String(d.detail);
-  }
-  function showError(msg) { setText($('error'), msg); $('error').classList.remove('hidden'); }
-  function clearError() { setText($('error'), ''); $('error').classList.add('hidden'); }
-  function clearResult() { $('result').classList.add('hidden'); }
-  function setBusy(on) {
-    $('loader').classList.toggle('hidden', !on);
-    document.querySelectorAll('.analyze-btn').forEach((b) => { b.disabled = on; });
-  }
-
-  function fillList(ul, items) {
-    ul.textContent = '';
-    const list = items && items.length ? items : [NA];
-    list.forEach((t) => { const li = document.createElement('li'); setText(li, t); ul.appendChild(li); });
-  }
-
-  function fillAdvice(advice) {
-    const card = $('adviceCard');
-    const steps = $('adviceSteps');
-    steps.textContent = '';
-    if (!advice || !Array.isArray(advice.steps) || !advice.steps.length) {
-      card.classList.add('hidden');
-      return;
+    // Build elements from data. Text is always set with textContent, never innerHTML.
+    function el(tag, props = {}, ...children) {
+      const node = document.createElement(tag);
+      for (const [key, value] of Object.entries(props)) {
+        if (value === undefined || value === null || value === false) continue;
+        if (key === 'class') node.className = value;
+        else if (key === 'text') node.textContent = value;
+        else if (key.startsWith('on') && typeof value === 'function') node.addEventListener(key.slice(2), value);
+        else node.setAttribute(key, value === true ? '' : String(value));
+      }
+      for (const child of children.flat()) {
+        if (child === null || child === undefined || child === false) continue;
+        node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+      }
+      return node;
     }
-    setText($('adviceTitle'), advice.title || 'What should I do now?');
-    advice.steps.forEach((step) => {
-      const li = document.createElement('li');
-      setText(li, step);
-      steps.appendChild(li);
+    const clear = (node) => { node.replaceChildren(); return node; };
+
+    function toast(message) {
+      const t = $('toast');
+      t.textContent = message;
+      t.style.opacity = '1';
+      clearTimeout(toast._timer);
+      toast._timer = setTimeout(() => { t.style.opacity = '0'; }, 2200);
+    }
+
+    async function readError(res) {
+      try {
+        const data = await res.json();
+        if (typeof data.detail === 'string') return data.detail;
+        if (Array.isArray(data.detail)) return data.detail.map((d) => d.msg).join('; ');
+      } catch (_) { /* not JSON */ }
+      return `The server returned an error (${res.status}).`;
+    }
+
+    function hostOf(url) {
+      try {
+        const withScheme = /^https?:\/\//i.test(url) ? url : `http://${url}`;
+        return new URL(withScheme).hostname.toLowerCase();
+      } catch (_) { return ''; }
+    }
+
+    const VERDICT_CLASS = { 'SAFE': 'ok', 'SUSPICIOUS': 'warn', 'SPAM-PHISHING': 'bad' };
+    const LEVEL_CLASS = { LOW: 'ok', MEDIUM: 'warn', HIGH: 'bad' };
+    const CONF_CLASS = { High: 'ok', Medium: 'warn', Low: 'neutral' };
+
+    $('skipLink').addEventListener('click', () => { const m = $('main'); m.setAttribute('tabindex', '-1'); m.focus(); });
+
+    // ── Theme ──────────────────────────────────────────────────────
+    function applyTheme(theme) {
+      if (theme) document.documentElement.dataset.theme = theme;
+      else delete document.documentElement.dataset.theme;
+    }
+    try { applyTheme(localStorage.getItem('ts-theme')); } catch (_) { /* storage blocked */ }
+    $('themeToggle').addEventListener('click', () => {
+      const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const current = document.documentElement.dataset.theme || (dark ? 'dark' : 'light');
+      const next = current === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+      try { localStorage.setItem('ts-theme', next); } catch (_) { /* storage blocked */ }
     });
-    card.classList.remove('hidden');
-  }
 
-  function fillChips(el, items) {
-    el.textContent = '';
-    if (!items || !items.length) { setText(el, 'None found'); return; }
-    items.forEach((t) => {
-      const s = document.createElement('span');
-      s.className = 'px-2 py-1 rounded bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200';
-      setText(s, t);
-      el.appendChild(s);
+    // ── View switching ─────────────────────────────────────────────
+    document.querySelectorAll('.nav [role="tab"]').forEach((tab) => {
+      tab.addEventListener('click', () => showView(tab.dataset.view));
     });
-  }
+    function showView(name) {
+      document.querySelectorAll('.nav [role="tab"]').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.view === name)));
+      $('view-analyze').hidden = name !== 'analyze';
+      $('view-model').hidden = name !== 'model';
+      if (name === 'model') loadModel();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
 
-  function fillUrlChips(items) {
-    const container = $('urls');
-    container.textContent = '';
-    if (!items || !items.length) { setText(container, 'No links found'); return; }
-    items.forEach((u) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'inline-flex max-w-full items-center gap-2 rounded border border-slate-300 bg-white px-3 py-2 text-left dark:border-slate-700 dark:bg-slate-950';
-      button.setAttribute('aria-label', u.defanged + ', ' + u.level + ' risk, locked');
-
-      const linkText = document.createElement('span');
-      linkText.className = 'break-all';
-      setText(linkText, u.defanged);
-      button.appendChild(linkText);
-
-      const badge = document.createElement('span');
-      const badgeClasses = {
-        LOW: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
-        MEDIUM: 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200',
-        HIGH: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'
-      };
-      badge.className = 'shrink-0 rounded px-2 py-1 text-xs font-semibold ' + (badgeClasses[u.level] || 'bg-slate-100 text-slate-800');
-      setText(badge, u.level || NA);
-      button.appendChild(badge);
-
-      const lock = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      lock.setAttribute('viewBox', '0 0 24 24');
-      lock.setAttribute('width', '16');
-      lock.setAttribute('height', '16');
-      lock.setAttribute('fill', 'none');
-      lock.setAttribute('stroke', 'currentColor');
-      lock.setAttribute('stroke-width', '2');
-      lock.setAttribute('aria-hidden', 'true');
-      const lockPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      lockPath.setAttribute('d', 'M5 10h14v11H5zM8 10V7a4 4 0 0 1 8 0v3');
-      lock.appendChild(lockPath);
-      button.appendChild(lock);
-      button.addEventListener('click', () => openLinkShield(u, button));
-      container.appendChild(button);
+    // ── Input kind switching ───────────────────────────────────────
+    let kind = 'email';
+    document.querySelectorAll('[data-kind]').forEach((btn) => {
+      btn.addEventListener('click', () => setKind(btn.dataset.kind));
     });
-  }
+    function setKind(next) {
+      kind = next;
+      ['email', 'sms', 'url'].forEach((k) => {
+        $(`in-${k}`).setAttribute('aria-selected', String(k === next));
+        $(`panel-${k}`).hidden = k !== next;
+      });
+      $('sampleBtn').textContent = next === 'email' ? 'Try a sample email' : next === 'sms' ? 'Try a sample SMS' : 'Try a sample link';
+      hideError();
+    }
 
-  function linkTarget(url) {
-    try {
-      let candidate = String(url || '').trim();
-      if (/^[a-z][a-z0-9+.-]*:/i.test(candidate)) {
-        if (!/^https?:\/\//i.test(candidate)) return null;
+    // Synthetic samples only. No real personal data.
+    const SAMPLES = {
+      email: [
+        'X-Synthetic-Sample: true (demo data; IP addresses are placeholders)',
+        'Received: from unknown (unknown [45.76.10.25]) by mx.relay.example with ESMTP id 3b2; Mon, 01 Jan 2024 10:00:00 +0000',
+        'Received: from mx.relay.example (mx.relay.example [198.51.100.9]) by mx.receiver.example with ESMTPS id 7a1; Mon, 01 Jan 2024 10:00:03 +0000',
+        'Authentication-Results: mx.receiver.example; spf=fail smtp.mailfrom=sbi-verify.xyz; dkim=none; dmarc=fail (p=REJECT) header.from=sbi-verify.xyz',
+        'From: security-alert@sbi-verify.xyz',
+        'To: victim@example.com',
+        'Subject: URGENT: Your SBI account has been suspended',
+        'Date: Mon, 01 Jan 2024 10:00:00 +0000',
+        'Message-ID: <phish001@sbi-verify.xyz>',
+        'Reply-To: collect@attacker-domain.top',
+        'MIME-Version: 1.0',
+        'Content-Type: text/html; charset=utf-8',
+        'Received-SPF: fail (sbi-verify.xyz: domain does not designate permitted senders)',
+        '',
+        '<html><body>',
+        '<p>Dear Customer,</p>',
+        '<p>Your SBI account has been <b>SUSPENDED</b> due to suspicious activity.</p>',
+        '<p>You must verify your KYC immediately to avoid permanent account closure.</p>',
+        '<p>Click here to verify: <a\x20href="http://sbi-kyc.xyz/verify?redirect=http://evil.top/steal">http://www.sbi.co.in/verify</a></p>',
+        '<p>Failure to act within 24 hours will result in legal action.</p>',
+        '<p>Share your OTP with our agent: Call +91-9999999999</p>',
+        '</body></html>',
+      ].join('\n'),
+      sms: 'Dear customer, your SBI KYC is pending and your account will be blocked today. Share the OTP sent to your phone with our agent. Verify now: http://sbi-kyc.xyz/12345',
+      url: 'http://sbi-kyc.xyz/verify?redirect=http://evil.top/steal',
+    };
+    const SAMPLE_SENDER = 'VK-SBIBNK';
+
+    $('sampleBtn').addEventListener('click', () => {
+      if (kind === 'email') { $('emailText').value = SAMPLES.email; $('emailFile').value = ''; }
+      if (kind === 'sms') { $('smsText').value = SAMPLES.sms; $('smsSender').value = SAMPLE_SENDER; }
+      if (kind === 'url') { $('urlText').value = SAMPLES.url; }
+      hideError();
+    });
+
+    $('clearBtn').addEventListener('click', () => {
+      $('emailText').value = ''; $('emailFile').value = ''; $('smsText').value = ''; $('smsSender').value = ''; $('urlText').value = '';
+      hideError();
+      showPlaceholder();
+    });
+
+    function showError(message) {
+      const box = $('formError');
+      box.textContent = message;
+      box.hidden = false;
+    }
+    function hideError() { $('formError').hidden = true; }
+
+    // ── Summary state ─────────────────────────────────────────────
+    function showPlaceholder() {
+      $('emptyState').hidden = false; $('loadingState').hidden = true; $('summaryState').hidden = true;
+      $('results').hidden = true;
+    }
+    function showLoading() {
+      $('emptyState').hidden = true; $('loadingState').hidden = false; $('summaryState').hidden = true;
+      $('results').hidden = true;
+    }
+
+    // ── Analyze ───────────────────────────────────────────────────
+    $('analyzeForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      hideError();
+
+      const button = $('analyzeBtn');
+      let request;
+      if (kind === 'email') {
+        const file = $('emailFile').files[0];
+        const text = $('emailText').value;
+        if (!file && !text.trim()) return showError('Paste an email source or upload an .eml or .txt file first.');
+        const form = new FormData();
+        if (file) form.append('file', file); else form.append('text', text);
+        request = { url: '/api/analyze/email', options: { method: 'POST', body: form } };
+      } else if (kind === 'sms') {
+        const text = $('smsText').value.trim();
+        if (!text) return showError('Paste the message text first.');
+        const body = { text, sender: $('smsSender').value.trim() || null };
+        request = { url: '/api/analyze/sms', options: { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } };
       } else {
-        candidate = 'http://' + candidate;
+        const text = $('urlText').value.trim();
+        if (!text) return showError('Enter a link to check.');
+        request = { url: '/api/analyze/url', options: { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) } };
       }
-      const parsed = new URL(candidate);
-      if (!/^https?:$/.test(parsed.protocol)) return null;
-      return { url: parsed.href, domain: parsed.hostname.toLowerCase().replace(/\.$/, '') };
-    } catch (e) { return null; }
-  }
 
-  function updateOpenButton() {
-    const typed = $('linkShieldDomain').value.trim().toLowerCase().replace(/\.$/, '');
-    const confirmationDone = $('linkShieldConfirmation').classList.contains('hidden') || $('linkShieldCountdown').dataset.finished === 'true';
-    $('linkShieldOpen').disabled = !realUrl || !activeDomain || !confirmationDone || typed !== activeDomain;
-  }
-
-  function closeLinkShield() {
-    if (modalCountdownTimer !== null) {
-      clearInterval(modalCountdownTimer);
-      modalCountdownTimer = null;
-    }
-    $('linkShieldModal').classList.add('hidden');
-    $('linkShieldDomain').value = '';
-    if (modalReturnFocus) modalReturnFocus.focus();
-  }
-
-  function openLinkShield(u, trigger) {
-    if (modalCountdownTimer !== null) clearInterval(modalCountdownTimer);
-    modalReturnFocus = trigger;
-    const target = linkTarget(u.display);
-    realUrl = target ? target.url : '';
-    activeDefangedUrl = u.defanged || '';
-    activeDomain = target ? target.domain : '';
-    setText($('linkShieldUrl'), activeDefangedUrl);
-    setText($('linkShieldLevel'), u.level || NA);
-    const reasonList = $('linkShieldReasons');
-    reasonList.textContent = '';
-    (u.reasons || []).forEach((reason) => {
-      const item = document.createElement('li');
-      setText(item, reason);
-      reasonList.appendChild(item);
+      button.disabled = true;
+      button.innerHTML = '';
+      button.append(el('span', { class: 'spinner', 'aria-hidden': 'true' }), ' Analyzing…');
+      showLoading();
+      try {
+        const res = await fetch(request.url, request.options);
+        if (!res.ok) throw new Error(await readError(res));
+        const data = await res.json();
+        if (kind === 'url') renderUrl(data); else renderMessage(data);
+      } catch (err) {
+        showPlaceholder();
+        showError(err.message || 'The analysis failed. Check that the server is running.');
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Analyze';
+      }
     });
-    $('linkShieldCopyStatus').textContent = '';
-    $('linkShieldDomain').value = '';
-    $('linkShieldCountdown').dataset.finished = 'false';
-    const level = String(u.level || '').toUpperCase();
-    $('linkShieldConfirmation').classList.toggle('hidden', level !== 'MEDIUM');
-    $('linkShieldOpen').classList.toggle('hidden', level === 'HIGH');
-    $('linkShieldOpen').disabled = level !== 'LOW' || !realUrl;
 
-    if (level === 'MEDIUM') {
-      let remaining = 10;
-      setText($('linkShieldCountdown'), 'Open available in ' + remaining + ' seconds.');
-      $('linkShieldOpen').disabled = true;
-      modalCountdownTimer = window.setInterval(() => {
-        remaining -= 1;
-        if (remaining <= 0) {
-          clearInterval(modalCountdownTimer);
-          modalCountdownTimer = null;
-          $('linkShieldCountdown').dataset.finished = 'true';
-          setText($('linkShieldCountdown'), 'Countdown complete.');
-          updateOpenButton();
+    // ── Gauge and verdict ─────────────────────────────────────────
+    function setGauge(score, cssClass) {
+      const value = Math.max(0, Math.min(100, Number(score) || 0));
+      const circumference = 314;
+      const arc = $('gaugeArc');
+      arc.style.transition = 'stroke-dashoffset .9s ease';
+      arc.style.color = cssClass === 'ok' ? 'var(--safe)' : cssClass === 'warn' ? 'var(--warn)' : cssClass === 'bad' ? 'var(--danger)' : 'var(--accent)';
+      requestAnimationFrame(() => { arc.style.strokeDashoffset = String(circumference - (value / 100) * circumference); });
+      $('gaugeValue').textContent = String(value);
+    }
+
+    function renderSummary({ channelText, verdict, score, pills }) {
+      const cls = VERDICT_CLASS[verdict] || 'neutral';
+      $('channelLabel').textContent = channelText;
+      $('verdictText').textContent = verdict;
+      const box = $('verdictBox');
+      box.className = `verdict-box ${cls}`;
+      setGauge(score, cls);
+      clear($('summaryPills')).append(...pills.map((p) => el('span', { class: `pill ${p.cls || ''}` }, p.text)));
+      $('emptyState').hidden = true; $('loadingState').hidden = true; $('summaryState').hidden = false;
+    }
+
+    function renderAdvice(advice) {
+      $('adviceTitle').textContent = advice.title;
+      clear($('adviceList')).append(...advice.steps.map((s) => el('li', { class: 'small', style: 'margin-left:4px' }, s)));
+    }
+
+    function renderReasons(reasons, ok) {
+      const list = clear($('reasonList'));
+      list.className = ok ? 'reasons ok' : 'reasons';
+      (reasons.length ? reasons : ['No strong spam or phishing signals were found.']).forEach((r) => {
+        list.append(el('li', {}, el('span', { class: 'dot', 'aria-hidden': 'true' }, ok ? '✓' : '!'), el('span', {}, r)));
+      });
+    }
+
+    function renderHighlights(words) {
+      const box = clear($('highlightList'));
+      if (!words || !words.length) { box.append(el('span', { class: 'small muted' }, 'No suspicious words were highlighted.')); return; }
+      words.slice(0, 40).forEach((w) => box.append(el('span', { class: 'hl' }, w)));
+    }
+
+    // ── Message result (email or SMS) ─────────────────────────────
+    function renderMessage(data) {
+      const verdict = data.verdict;
+      const isEmail = data.channel === 'email';
+      const meta = data.metadata || {};
+      const pills = [{ text: isEmail ? 'Email' : 'SMS', cls: 'neutral' }];
+      if (data.forensics) pills.push({ text: `Origin confidence: ${data.forensics.origin.confidence}`, cls: CONF_CLASS[data.forensics.origin.confidence] || '' });
+      pills.push({ text: `Model score ${(data.ml_score * 100).toFixed(1)}%` });
+
+      renderSummary({ channelText: isEmail ? 'Email analysis' : 'SMS analysis', verdict, score: data.risk_score, pills });
+      $('caseLabel').textContent = data.case_id ? `Case ${data.case_id}` : '';
+      renderReasons(data.reasons, verdict === 'SAFE');
+      renderAdvice(data.advice);
+      $('reportLink').href = data.case_id ? `/api/report/${encodeURIComponent(data.case_id)}.pdf` : '#';
+      $('reportLink').hidden = !data.case_id;
+      renderHighlights(data.highlights);
+      renderShield(data.urls || [], verdict);
+
+      $('emailBlock').hidden = !isEmail;
+      $('forensicsBlock').hidden = !isEmail;
+      if (isEmail) {
+        renderEmailDetails(meta);
+        $('emailPreviewFrame').srcdoc = meta.html_preview || '<p style="font-family:sans-serif;padding:16px;color:#555">This message has no HTML body to preview.</p>';
+        renderForensics(data.forensics, data.geolocation);
+      } else {
+        clear($('detailsList')).append(
+          el('dt', {}, 'Sender ID'), el('dd', {}, meta.sender || 'Not given'),
+          el('dt', {}, 'Patterns'), el('dd', {}, (meta.patterns || []).join(', ') || 'None found'),
+        );
+      }
+      $('results').hidden = false;
+      $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function renderEmailDetails(meta) {
+      const attachments = meta.attachments || [];
+      clear($('detailsList')).append(
+        el('dt', {}, 'Subject'), el('dd', {}, meta.subject || 'Not given'),
+        el('dt', {}, 'From'), el('dd', {}, meta.from_ || 'Not given'),
+        el('dt', {}, 'Reply-To'), el('dd', {}, meta.reply_to || 'Not given'),
+        el('dt', {}, 'Attachments'), el('dd', {}, String(attachments.length)),
+      );
+      const auth = meta.auth || {};
+      clear($('authChips')).append(
+        el('span', { class: `pill ${auth.spf && /fail/.test(auth.spf) ? 'bad' : auth.spf ? 'ok' : ''}` }, `SPF: ${auth.spf ? (/fail/.test(auth.spf) ? 'fail' : 'present') : 'absent'}`),
+        el('span', { class: `pill ${auth.dkim ? 'ok' : 'warn'}` }, `DKIM: ${auth.dkim ? 'signed' : 'not signed'}`),
+        el('span', { class: `pill ${auth.dmarc && /fail/.test(auth.dmarc) ? 'bad' : auth.dmarc ? 'ok' : ''}` }, `DMARC: ${auth.dmarc ? (/fail/.test(auth.dmarc) ? 'fail' : 'present') : 'absent'}`),
+      );
+      const body = clear($('attachBody'));
+      if (!attachments.length) {
+        body.append(el('tr', {}, el('td', { colspan: '4', class: 'muted' }, 'No attachments')));
+      } else {
+        attachments.forEach((a) => body.append(el('tr', {},
+          el('td', { class: 'wrap' }, a.filename),
+          el('td', {}, a.content_type),
+          el('td', {}, `${a.size_bytes} bytes`),
+          el('td', { class: 'wrap mono' }, a.sha256),
+        )));
+      }
+    }
+
+    // ── Link Shield ───────────────────────────────────────────────
+    let activeLink = null;
+    let countdownTimer = null;
+
+    function renderShield(urls, verdict) {
+      const list = clear($('shieldList'));
+      $('shieldBlock').hidden = urls.length === 0;
+      if (!urls.length) return;
+      urls.forEach((link) => {
+        const level = link.level || 'LOW';
+        const chip = el('button', {
+          type: 'button', class: 'lock-chip', 'aria-label': `Locked link ${link.defanged}, ${level} risk. Open details.`,
+        },
+          svgLock(),
+          el('code', { class: 'wrap' }, link.defanged),
+          el('span', { class: `pill ${LEVEL_CLASS[level] || ''} lvl` }, `${level} · ${link.risk}`),
+        );
+        chip.addEventListener('click', () => openShield(link, verdict));
+        list.append(chip);
+      });
+      list.append(el('p', { class: 'note' }, 'Shown defanged and locked. The server never visits a link, and the page never opens one automatically.'));
+    }
+
+    function svgLock() {
+      const ns = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(ns, 'svg');
+      svg.setAttribute('width', '16'); svg.setAttribute('height', '16'); svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('fill', 'none'); svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '2');
+      svg.setAttribute('aria-hidden', 'true');
+      const rect = document.createElementNS(ns, 'rect');
+      rect.setAttribute('x', '5'); rect.setAttribute('y', '11'); rect.setAttribute('width', '14'); rect.setAttribute('height', '10'); rect.setAttribute('rx', '2');
+      const path = document.createElementNS(ns, 'path');
+      path.setAttribute('d', 'M8 11V7a4 4 0 0 1 8 0v4');
+      svg.append(rect, path);
+      return svg;
+    }
+
+    function openShield(link, verdict) {
+      activeLink = link;
+      const level = link.level || 'LOW';
+      const blockedByVerdict = verdict !== 'SAFE';
+      const head = $('shieldHead');
+      head.className = `modal-head ${level.toLowerCase()}`;
+      $('shieldLevel').className = `pill ${LEVEL_CLASS[level] || ''}`;
+      $('shieldLevel').textContent = `${level} risk · ${link.risk}`;
+      $('shieldDefanged').textContent = link.defanged;
+      clear($('shieldReasons')).append(...(link.reasons || []).map((r) => el('li', {}, el('span', { class: 'dot', 'aria-hidden': 'true' }, '!'), el('span', {}, r))));
+      $('shieldReasons').className = 'reasons';
+      $('shieldCopy').hidden = false;
+      $('shieldOpenWrap').hidden = true;
+      clear($('shieldOpenWrap'));
+      $('shieldMediumBlock').hidden = true;
+      stopCountdown();
+
+      if (level === 'HIGH') {
+        $('shieldTitle').textContent = 'High-risk link: opening is disabled';
+      } else if (level === 'MEDIUM') {
+        $('shieldTitle').textContent = 'Medium-risk link: wait, then confirm';
+        $('shieldMediumBlock').hidden = false;
+        $('shieldTypeDomain').value = '';
+        $('shieldDomainHint').textContent = hostOf(link.display) || '(domain)';
+        startCountdown(10);
+      } else {
+        $('shieldTitle').textContent = blockedByVerdict ? 'Link check' : 'Link check (low risk)';
+        $('shieldOpenWrap').hidden = false;
+        $('shieldOpenWrap').append(el('button', { type: 'button', class: 'btn btn-block', id: 'shieldOpenLow' }, 'Open in new tab'));
+        $('shieldOpenLow').addEventListener('click', () => openAnchor(link.display));
+      }
+      $('shieldModal').showModal();
+      $('shieldClose').focus();
+    }
+
+    function startCountdown(seconds) {
+      let left = seconds;
+      const label = $('shieldWait');
+      const update = () => {
+        if (left > 0) {
+          label.replaceChildren(document.createTextNode('Wait '), el('span', { class: 'countdown' }, `${left}s`), document.createTextNode(' before you can confirm this link.'));
         } else {
-          setText($('linkShieldCountdown'), 'Open available in ' + remaining + ' seconds.');
+          label.textContent = 'You can now confirm this link by typing its domain.';
+          stopCountdown();
         }
-      }, 1000);
+        refreshMediumOpen();
+      };
+      countdownTimer = setInterval(() => { left -= 1; update(); }, 1000);
+      update();
     }
-    $('linkShieldModal').classList.remove('hidden');
-    $('linkShieldClose').focus();
-  }
+    function stopCountdown() { if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } }
 
-  async function copyDefangedLink() {
-    try {
-      await navigator.clipboard.writeText(activeDefangedUrl);
-      setText($('linkShieldCopyStatus'), 'Copied.');
-    } catch (e) {
-      setText($('linkShieldCopyStatus'), 'Could not copy to clipboard.');
-    }
-  }
-
-  function fillDetails(rows) {
-    const dl = $('details');
-    dl.textContent = '';
-    rows.forEach(([k, v]) => {
-      const div = document.createElement('div');
-      div.className = 'flex justify-between gap-4 py-2';
-      const dt = document.createElement('dt');
-      dt.className = 'text-slate-500 dark:text-slate-400';
-      setText(dt, k);
-      const dd = document.createElement('dd');
-      dd.className = 'text-right break-all';
-      setText(dd, v);
-      div.appendChild(dt); div.appendChild(dd);
-      dl.appendChild(div);
-    });
-  }
-
-  function paint(label, tone, score) {
-    const badge = $('verdictBadge');
-    setText(badge, label);
-    badge.className = 'inline-block px-4 py-2 rounded-full text-lg font-bold text-white ' + (TONE_BG[tone] || 'bg-slate-500');
-    const s = Math.max(0, Math.min(100, Number(score) || 0));
-    setText($('gaugeValue'), Math.round(s));
-    const arc = $('gaugeArc');
-    arc.style.strokeDasharray = String(CIRC);
-    arc.style.strokeDashoffset = String(CIRC);
-    arc.setAttribute('stroke', TONE_HEX[tone] || '#64748b');
-    requestAnimationFrame(() => { arc.style.strokeDashoffset = String(CIRC * (1 - s / 100)); });
-    $('result').classList.remove('hidden');
-  }
-
-  /* ---------- rendering ---------- */
-  function renderResult(d) {
-    paint(d.verdict, VERDICT_TONE[d.verdict] || 'warn', d.risk_score);
-    const reportLink = $('downloadReport');
-    if (typeof d.case_id === 'string' && d.case_id) {
-      reportLink.href = '/api/report/' + encodeURIComponent(d.case_id) + '.pdf';
-      reportLink.classList.remove('hidden');
-    } else {
-      reportLink.removeAttribute('href');
-      reportLink.classList.add('hidden');
-    }
-    fillAdvice(d.advice);
-    setText($('channelLine'), 'Channel: ' + (d.channel || NA));
-    fillList($('reasons'), d.reasons);
-    fillChips($('highlights'), d.highlights);
-    fillUrlChips(d.urls || []);
-
-    const rows = [
-      ['ML spam probability', fmtPct(d.ml_score)],
-      ['Channel', d.channel || NA],
-    ];
-    const meta = d.metadata || {};
-    Object.keys(meta).forEach((k) => {
-      if (k === 'html_preview') return;
-      const v = meta[k];
-      rows.push([k.replace(/_/g, ' '), (v !== null && typeof v === 'object') ? JSON.stringify(v).slice(0, 300) : String(v)]);
-    });
-    fillDetails(rows);
-
-    const preview = meta.html_preview || '';
-    $('emailPreviewSection').classList.toggle('hidden', !preview);
-    $('emailPreviewContent').classList.add('hidden');
-    $('previewToggle').setAttribute('aria-expanded', 'false');
-    $('emailPreviewFrame').srcdoc = preview ? highlightedPreview(preview, d.highlights) : '';
-  }
-
-  function highlightedPreview(preview, highlights) {
-    const previewDoc = new DOMParser().parseFromString(preview, 'text/html');
-    const terms = (highlights || [])
-      .filter((term) => typeof term === 'string' && term.length)
-      .sort((a, b) => b.length - a.length);
-    if (terms.length) {
-      const pattern = new RegExp('(' + terms.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi');
-      const walker = previewDoc.createTreeWalker(previewDoc.body, NodeFilter.SHOW_TEXT);
-      const textNodes = [];
-      let node;
-      while ((node = walker.nextNode())) {
-        if (!node.parentElement.closest('script, style, mark')) textNodes.push(node);
+    function refreshMediumOpen() {
+      if (!activeLink || (activeLink.level || '') !== 'MEDIUM') return;
+      const typed = $('shieldTypeDomain').value.trim().toLowerCase();
+      const expected = hostOf(activeLink.display);
+      const waited = countdownTimer === null;
+      const ready = waited && expected && typed === expected;
+      const wrap = clear($('shieldOpenWrap'));
+      $('shieldOpenWrap').hidden = !ready;
+      if (ready) {
+        // The anchor exists only after both the countdown and the typed domain are satisfied.
+        const anchor = el('a', { class: 'btn btn-primary btn-block open-link', id: 'shieldOpenMedium' }, 'Open in new tab');
+        anchor.setAttribute('href', activeLink.display);
+        anchor.setAttribute('target', '_blank');
+        anchor.setAttribute('rel', 'noopener noreferrer');
+        wrap.append(anchor);
       }
-      textNodes.forEach((textNode) => {
-        const text = textNode.nodeValue;
-        const fragment = previewDoc.createDocumentFragment();
-        let lastIndex = 0;
-        let match;
-        pattern.lastIndex = 0;
-        while ((match = pattern.exec(text))) {
-          fragment.appendChild(previewDoc.createTextNode(text.slice(lastIndex, match.index)));
-          const mark = previewDoc.createElement('mark');
-          mark.title = match[0];
-          mark.appendChild(previewDoc.createTextNode(match[0]));
-          fragment.appendChild(mark);
-          lastIndex = pattern.lastIndex;
-        }
-        if (lastIndex) {
-          fragment.appendChild(previewDoc.createTextNode(text.slice(lastIndex)));
-          textNode.parentNode.replaceChild(fragment, textNode);
-        }
-      });
     }
-    const body = new XMLSerializer().serializeToString(previewDoc.body);
-    return '<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:sans-serif;padding:1rem}mark{background:#fde68a;color:#78350f}</style></head>' + body + '</html>';
-  }
 
-  function renderUrl(d) {
-    paint(d.level + ' RISK', LEVEL_TONE[d.level] || 'warn', d.risk);
-    $('downloadReport').removeAttribute('href');
-    $('downloadReport').classList.add('hidden');
-    $('adviceCard').classList.add('hidden');
-    setText($('channelLine'), 'Link check (static analysis only)');
-    fillList($('reasons'), d.reasons);
-    fillChips($('highlights'), []);
-    fillUrlChips([{ display: d.display, defanged: d.defanged, level: d.level, risk: d.risk, reasons: d.reasons }]);
-    $('emailPreviewSection').classList.add('hidden');
-    fillDetails([['Level', d.level], ['Risk', d.risk + ' / 100']]);
-  }
+    $('shieldTypeDomain').addEventListener('input', () => refreshMediumOpen());
 
-  function fillTable(tbody, rows, cols) {
-    tbody.textContent = '';
-    if (!rows.length) {
-      const tr = document.createElement('tr');
-      const td = document.createElement('td');
-      td.colSpan = cols;
-      td.className = 'py-1 text-slate-500 dark:text-slate-400';
-      setText(td, NA);
-      tr.appendChild(td); tbody.appendChild(tr);
-      return;
+    function openAnchor(url) {
+      // Low-risk links only, after an explicit click. Opened with no referrer or opener.
+      const anchor = el('a', { href: url, target: '_blank', rel: 'noopener noreferrer' });
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
     }
-    rows.forEach((r) => {
-      const tr = document.createElement('tr');
-      r.forEach((c, i) => {
-        const td = document.createElement('td');
-        td.className = 'py-1 pr-2 ' + (i ? 'text-right' : '');
-        setText(td, c);
-        tr.appendChild(td);
-      });
-      tbody.appendChild(tr);
+
+    $('shieldCopy').addEventListener('click', async () => {
+      if (!activeLink) return;
+      try {
+        await navigator.clipboard.writeText(activeLink.defanged);
+        toast('Defanged link copied');
+      } catch (_) {
+        toast('Copy failed. Select the text and copy it.');
+      }
     });
-  }
+    $('shieldClose').addEventListener('click', () => $('shieldModal').close());
+    $('shieldModal').addEventListener('close', () => { stopCountdown(); activeLink = null; });
 
-  async function loadModelInfo() {
-    setText($('modelError'), '');
-    try {
-      const res = await fetch('/api/model/info');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const m = await res.json();
-      setText($('bestModel'), m.best_model || NA);
-      fillTable($('miOverall'), Object.entries(m.test_metrics_overall || {}).map(([k, v]) => [k, fmtMetric(k, v)]), 2);
-      fillTable($('miChannel'), (m.test_metrics_by_channel || []).map((c) => [c.channel || NA, fmtPct(c.accuracy), fmtPct(c.f1), fmtPct(c.roc_auc)]), 4);
-      fillTable($('miComparison'), (m.model_comparison_on_val || []).map((c) => [c.model || NA, fmtPct(c.accuracy), fmtPct(c.f1), fmtPct(c.roc_auc)]), 4);
-      fillTable($('miDataset'), Object.entries(m.dataset_sizes || {}).map(([k, v]) => [k.replace(/_/g, ' '), fmtMetric(k, v)]), 2);
-    } catch (err) {
-      setText($('modelError'), 'Could not load model info: ' + err.message);
+    // ── Forensics ─────────────────────────────────────────────────
+    let map = null;
+
+    function renderForensics(f, geo) {
+      if (!f) return;
+      const origin = f.origin || {};
+      const pill = $('originConfidence');
+      pill.className = `pill ${CONF_CLASS[origin.confidence] || ''}`;
+      pill.textContent = `Confidence: ${origin.confidence || 'n/a'}`;
+      clear($('originList')).append(
+        el('dt', {}, 'Origin IP'), el('dd', { class: 'mono' }, origin.ip || 'Not found'),
+        el('dt', {}, 'Location'), el('dd', {}, geo && geo.available ? [geo.city, geo.country].filter(Boolean).join(', ') : 'Not available'),
+        el('dt', {}, 'From domain'), el('dd', { class: 'mono' }, f.from_domain || 'Not found'),
+        el('dt', {}, 'Return-Path'), el('dd', { class: 'mono' }, f.return_path_domain || 'Not given'),
+        el('dt', {}, 'Reply-To'), el('dd', { class: 'mono' }, f.reply_to_domain || 'Not given'),
+      );
+      $('originReason').textContent = origin.reason || '';
+
+      renderMap(geo);
+
+      const hops = clear($('hopBody'));
+      if (!f.hops.length) hops.append(el('tr', {}, el('td', { colspan: '7', class: 'muted' }, 'No Received headers in this message, so the route cannot be traced.')));
+      f.hops.forEach((h) => hops.append(el('tr', {},
+        el('td', {}, h.hop),
+        el('td', { class: 'wrap mono' }, h.from_host || '-'),
+        el('td', { class: 'wrap mono' }, h.by_host || '-'),
+        el('td', { class: 'mono' }, h.ip || '-'),
+        el('td', { class: 'mono' }, h.timestamp ? h.timestamp.replace('T', ' ').replace(/\+00:00$/, '') : '-'),
+        el('td', {}, h.delay_seconds === null || h.delay_seconds === undefined ? '-' : `${h.delay_seconds}s`),
+        el('td', { class: h.anomaly ? 'wrap' : 'muted' }, h.anomaly || 'None'),
+      )));
+
+      const findings = clear($('findingBody'));
+      if (!f.findings.length) findings.append(el('tr', {}, el('td', { colspan: '3', class: 'muted' }, 'No header or sender checks were triggered.')));
+      const max = Math.max(1, ...f.findings.map((x) => x.severity));
+      f.findings.forEach((x) => findings.append(el('tr', {},
+        el('td', {}, el('span', { class: 'pill' }, x.kind)),
+        el('td', { class: 'wrap' }, x.detail),
+        el('td', {}, el('div', { class: 'bar-track', role: 'img', 'aria-label': `Weight ${x.severity} of 100` },
+          el('div', { class: 'bar-fill', style: `width:${Math.round((x.severity / max) * 100)}%` }))),
+      )));
     }
-  }
 
-  /* ---------- actions ---------- */
-  function showTab(tab) {
-    ['email', 'sms', 'url'].forEach((t) => {
-      const active = t === tab;
-      $('panel' + cap(t)).classList.toggle('hidden', !active);
-      const btn = document.querySelector('[data-tab="' + t + '"]');
-      btn.classList.toggle('bg-emerald-600', active);
-      btn.classList.toggle('text-white', active);
-      btn.setAttribute('aria-pressed', String(active));
-    });
-    clearError();
-    clearResult();
-  }
-
-  function loadSample(kind) {
-    if (kind === 'email') $('emailText').value = SAMPLES.email;
-    if (kind === 'sms') $('smsText').value = SAMPLES.sms;
-    if (kind === 'url') $('inputUrl').value = SAMPLES.url;
-    showTab(kind);
-  }
-
-  async function analyze(tab) {
-    clearError();
-    clearResult();
-    let url;
-    let opts;
-    if (tab === 'email') {
-      const text = $('emailText').value;
-      if (!text.trim()) return showError('Paste an email or choose a file first.');
-      const fd = new FormData();
-      fd.append('text', text);
-      url = '/api/analyze/email';
-      opts = { method: 'POST', body: fd };
-    } else if (tab === 'sms') {
-      const text = $('smsText').value;
-      if (!text.trim()) return showError('Paste an SMS message first.');
-      url = '/api/analyze/sms';
-      opts = { method: 'POST', headers: { 'Content-Type': 'application/json' },
-               body: JSON.stringify({ text: text, sender: $('smsSender').value.trim() || null }) };
-    } else {
-      const text = $('inputUrl').value.trim();
-      if (!text) return showError('Enter a link to check.');
-      url = '/api/analyze/url';
-      opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text }) };
+    function renderMap(geo) {
+      const note = $('geoNote');
+      const box = $('geoMap');
+      if (map) { map.remove(); map = null; }
+      if (!geo || !geo.available || geo.latitude === null || geo.longitude === null) {
+        clear(box).append(el('div', { class: 'empty', style: 'padding:24px' }, 'No map is shown.'));
+        note.textContent = geo ? geo.reason : 'No location is available for this message.';
+        return;
+      }
+      if (typeof window.L === 'undefined') {
+        clear(box).append(el('div', { class: 'empty', style: 'padding:24px' }, 'The map library could not load. Check your connection.'));
+        note.textContent = `Approximate location: ${[geo.city, geo.country].filter(Boolean).join(', ')}. ${geo.reason}`;
+        return;
+      }
+      clear(box);
+      map = window.L.map(box, { attributionControl: true, zoomControl: true }).setView([geo.latitude, geo.longitude], 5);
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 12, attribution: '&copy; OpenStreetMap contributors',
+      }).addTo(map);
+      window.L.circle([geo.latitude, geo.longitude], { radius: 150000, color: '#2456d4', fillOpacity: .12 }).addTo(map);
+      window.L.marker([geo.latitude, geo.longitude]).addTo(map)
+        .bindPopup([geo.city, geo.country].filter(Boolean).join(', ') || 'Approximate origin');
+      note.textContent = `Approximate location, not an exact address. ${geo.reason}`;
+      setTimeout(() => map && map.invalidateSize(), 150);
     }
-    setBusy(true);
-    try {
-      const res = await fetch(url, opts);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(detailText(data) || ('Request failed (HTTP ' + res.status + ')'));
-      if (tab === 'url') renderUrl(data); else renderResult(data);
-    } catch (err) {
-      showError(err.message || 'Something went wrong.');
-    } finally {
-      setBusy(false);
+
+    // ── URL result ────────────────────────────────────────────────
+    function renderUrl(d) {
+      const level = d.level || 'LOW';
+      const verdictLike = level === 'HIGH' ? 'SPAM-PHISHING' : level === 'MEDIUM' ? 'SUSPICIOUS' : 'SAFE';
+      renderSummary({
+        channelText: 'Link analysis (static, not visited)',
+        verdict: verdictLike, score: d.risk,
+        pills: [{ text: `Level ${level}`, cls: LEVEL_CLASS[level] || '' }],
+      });
+      $('caseLabel').textContent = '';
+      renderReasons(d.reasons || [], level === 'LOW');
+      renderAdvice({
+        title: level === 'LOW' ? 'No obvious URL risk' : 'Do not open this link',
+        steps: level === 'LOW'
+          ? ['No strong signs of risk were found from the text alone.', 'Check the sender through an official channel before entering any details.']
+          : ['Do not open the link or enter any details on the page it leads to.', 'Type the official address of the organisation yourself instead.'],
+      });
+      $('reportLink').hidden = true;
+      clear($('highlightList')).append(el('span', { class: 'small muted' }, 'Highlighting applies to email and SMS.'));
+      renderShield([d], verdictLike);
+      $('emailBlock').hidden = true;
+      $('forensicsBlock').hidden = true;
+      $('results').hidden = false;
+      $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  }
 
-  async function loadFile(f) {
-    if (f.size > 5 * 1024 * 1024) return showError('File is larger than 5 MB.');
-    try { $('emailText').value = await f.text(); }
-    catch (e) { showError('Could not read that file.'); }
-  }
+    // ── Model page (values come only from the API) ───────────────
+    let modelLoaded = false;
+    async function loadModel() {
+      if (modelLoaded) return;
+      const status = $('modelStatus');
+      try {
+        const res = await fetch('/api/model/info');
+        if (!res.ok) throw new Error(await readError(res));
+        const m = await res.json();
+        modelLoaded = true;
+        renderModel(m);
+        status.hidden = true;
+        $('modelBody').hidden = false;
+      } catch (err) {
+        clear(status).append(el('p', {}, `Metrics are not available: ${err.message}`));
+      }
+    }
 
-  function applyTheme(dark) {
-    document.documentElement.classList.toggle('dark', dark);
-    try { localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light'); } catch (e) { /* storage blocked */ }
-  }
-  function initTheme() {
-    let saved = null;
-    try { saved = localStorage.getItem(THEME_KEY); } catch (e) { saved = null; }
-    applyTheme(saved === 'dark');
-  }
+    const fmt = (v, digits = 4) => (typeof v === 'number' ? v.toFixed(digits) : 'not available');
 
-  /* ---------- wiring ---------- */
-  document.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
-  document.querySelectorAll('[data-sample]').forEach((b) => b.addEventListener('click', () => loadSample(b.dataset.sample)));
-  $('btnAnalyzeEmail').addEventListener('click', () => analyze('email'));
-  $('btnAnalyzeSms').addEventListener('click', () => analyze('sms'));
-  $('btnAnalyzeUrl').addEventListener('click', () => analyze('url'));
-  $('btnTheme').addEventListener('click', () => applyTheme(!document.documentElement.classList.contains('dark')));
-  $('previewToggle').addEventListener('click', () => {
-    const expanded = $('previewToggle').getAttribute('aria-expanded') === 'true';
-    $('previewToggle').setAttribute('aria-expanded', String(!expanded));
-    $('emailPreviewContent').classList.toggle('hidden', expanded);
-  });
-  $('linkShieldClose').addEventListener('click', closeLinkShield);
-  $('linkShieldCopy').addEventListener('click', copyDefangedLink);
-  $('linkShieldDomain').addEventListener('input', updateOpenButton);
-  $('linkShieldOpen').addEventListener('click', () => {
-    if (!$('linkShieldOpen').disabled && realUrl) window.open(realUrl, '_blank', 'noopener,noreferrer');
-  });
-  $('linkShieldModal').addEventListener('click', (event) => {
-    if (event.target === $('linkShieldModal')) closeLinkShield();
-  });
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !$('linkShieldModal').classList.contains('hidden')) closeLinkShield();
-  });
+    function renderModel(m) {
+      const o = m.test_metrics_overall || {};
+      $('modelName').textContent = `Best model: ${m.best_model || 'not available'}`;
+      clear($('modelMetrics')).append(...[
+        ['Accuracy', fmt(o.accuracy)], ['Precision', fmt(o.precision)], ['Recall', fmt(o.recall)],
+        ['F1', fmt(o.f1)], ['ROC-AUC', fmt(o.roc_auc)],
+      ].map(([label, num]) => el('div', { class: 'metric' }, el('div', { class: 'label' }, label), el('div', { class: 'num' }, num))));
 
-  const dz = $('dropzone');
-  ['dragenter', 'dragover'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('ring-2'); }));
-  ['dragleave', 'drop'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove('ring-2'); }));
-  dz.addEventListener('drop', (e) => { const f = e.dataTransfer.files[0]; if (f) loadFile(f); });
-  $('emailFile').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) loadFile(f); });
+      const channels = clear($('channelBody'));
+      const rows = (m.test_metrics_by_channel || []);
+      if (!rows.length) channels.append(el('tr', {}, el('td', { colspan: '6', class: 'muted' }, 'not available')));
+      rows.forEach((c) => channels.append(el('tr', {},
+        el('td', {}, c.channel), el('td', {}, fmt(c.accuracy)), el('td', {}, fmt(c.precision)),
+        el('td', {}, fmt(c.recall)), el('td', {}, fmt(c.f1)), el('td', {}, fmt(c.roc_auc)),
+      )));
 
-  initTheme();
-  showTab('email');
-  loadModelInfo();
-})();
-</script>
+      const cm = o.confusion_matrix;
+      const box = clear($('confusionBox'));
+      if (Array.isArray(cm) && cm.length === 2) {
+        const [[tn, fp], [fn, tp]] = cm;
+        box.append(el('div', { class: 'table-wrap' }, el('table', {},
+          el('thead', {}, el('tr', {}, el('th', {}, ''), el('th', {}, 'Predicted ham'), el('th', {}, 'Predicted spam'))),
+          el('tbody', {},
+            el('tr', {}, el('th', {}, 'Actual ham'), el('td', {}, String(tn)), el('td', {}, String(fp))),
+            el('tr', {}, el('th', {}, 'Actual spam'), el('td', {}, String(fn)), el('td', {}, String(tp))),
+          ))));
+      } else {
+        box.append(el('p', { class: 'muted' }, 'not available'));
+      }
+
+      const compare = clear($('compareBody'));
+      (m.model_comparison_on_val || []).forEach((c) => compare.append(el('tr', {},
+        el('td', {}, c.model), el('td', {}, fmt(c.f1)), el('td', {}, fmt(c.roc_auc)), el('td', {}, c.train_time_s !== undefined ? `${c.train_time_s} s` : 'not available'),
+      )));
+
+      const ds = m.dataset_sizes || {};
+      clear($('datasetList')).append(
+        el('dt', {}, 'Training rows'), el('dd', {}, ds.train !== undefined ? String(ds.train) : 'not available'),
+        el('dt', {}, 'Synthetic India rows'), el('dd', {}, ds.train_india_synthetic !== undefined ? `${ds.train_india_synthetic} (training only)` : 'not available'),
+        el('dt', {}, 'Validation rows'), el('dd', {}, ds.val !== undefined ? String(ds.val) : 'not available'),
+        el('dt', {}, 'Test rows'), el('dd', {}, ds.test !== undefined ? String(ds.test) : 'not available'),
+      );
+      $('limitNote').textContent = 'The public datasets are older and mostly English. The model reads text only, and the synthetic India messages are used for training only, never for validation or testing.';
+      clear($('spamTerms')).append(...((m.top_spam_terms || []).slice(0, 20).map((t) => el('span', { class: 'hl' }, t))));
+      clear($('hamTerms')).append(...((m.top_ham_terms || []).slice(0, 20).map((t) => el('span', { class: 'pill' }, t))));
+    }
+
+    setKind('email');
+    showPlaceholder();
+  })();
+  </script>
 </body>
 </html>

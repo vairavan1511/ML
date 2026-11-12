@@ -154,6 +154,8 @@ def _to_response(result: dict) -> AnalysisResult:
         ml_score=result["ml_score"],
         channel=result["channel"],
         metadata=result.get("metadata", {}),
+        forensics=result.get("forensics"),
+        geolocation=result.get("geolocation"),
         case_id=case_id,
         advice=advice_for(result["verdict"]),
     )

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from app.config import settings
@@ -21,11 +22,15 @@ def _term_reasons(text: str) -> list[tuple[str, int]]:
     """Find top-terms from LR weights that appear in the text."""
     terms = _load_top_terms()
     spam_terms = terms.get("top_spam_terms", [])
-    found = [t for t in spam_terms if t.lower() in text.lower()]
+    # Whole-word match only, and skip very short terms, so "co" or "to" never match inside words.
+    found = [
+        t for t in spam_terms
+        if len(t) >= 3 and re.search(rf"(?<!\w){re.escape(t.lower())}(?!\w)", text.lower())
+    ]
     reasons = []
     for i, t in enumerate(found[:5]):
         weight = len(spam_terms) - spam_terms.index(t)   # higher rank = higher weight
-        reasons.append((f"Contains high-risk term: '{t}'", weight))
+        reasons.append((f"Contains a word often seen in spam: '{t}'", weight))
     return reasons
 
 
@@ -47,8 +52,9 @@ def build_reasons(
         candidates.append((flag, 100 - i * 5))   # preserve rule order as priority
 
     # (c) URL findings
+    # URL evidence (e.g. link text that differs from the real target) outranks generic header flags
     for i, r in enumerate(url_reasons):
-        candidates.append((r, 80 - i * 5))
+        candidates.append((r, 105 - i * 2))
 
     # (d) Attachment findings
     for i, r in enumerate(attachment_flags):

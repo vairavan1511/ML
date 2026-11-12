@@ -10,12 +10,15 @@ from xml.sax.saxutils import escape
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.lib import colors
 from reportlab.platypus import (
     ListFlowable,
     ListItem,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
+    Table,
+    TableStyle,
 )
 
 from app.config import settings
@@ -43,6 +46,104 @@ def _text(value) -> str:
     return _NOT_AVAILABLE if value is None or value == "" else str(value)
 
 
+def _forensic_summary(result: dict) -> dict:
+    """Return origin, location, hops and checks from a stored analysis result."""
+    forensics = result.get("forensics") or {}
+    geo = result.get("geolocation") or {}
+    origin = forensics.get("origin") or {}
+    location = "Not available"
+    if geo.get("available"):
+        location = ", ".join(x for x in (geo.get("city"), geo.get("country")) if x) or "Not available"
+    return {
+        "origin_ip": _text(origin.get("ip")),
+        "confidence": _text(origin.get("confidence")),
+        "origin_reason": _text(origin.get("reason")),
+        "location": location,
+        "location_note": _text(geo.get("reason")),
+        "hops": forensics.get("hops") or [],
+        "findings": forensics.get("findings") or [],
+        "is_email": result.get("channel") == "email",
+    }
+
+
+def _forensic_text_lines(fx: dict) -> list[str]:
+    """Plain-text lines for the hashed report text."""
+    if not fx["is_email"]:
+        return []
+    lines = [
+        f"Origin IP: {fx['origin_ip']}",
+        f"Origin confidence: {fx['confidence']}",
+        f"Origin note: {fx['origin_reason']}",
+        f"Location: {fx['location']}",
+        f"Location note: {fx['location_note']}",
+        "Received chain (oldest hop first):",
+    ]
+    if not fx["hops"]:
+        lines.append("- no Received headers")
+    for hop in fx["hops"]:
+        lines.append(
+            f"- hop {hop.get('hop')}: from {hop.get('from_host') or '-'} by {hop.get('by_host') or '-'}"
+            f" ip {hop.get('ip') or '-'} time {hop.get('timestamp') or '-'}"
+            f" delay {hop.get('delay_seconds') if hop.get('delay_seconds') is not None else '-'}s"
+            f" note {hop.get('anomaly') or 'none'}"
+        )
+    lines.append("Checks:")
+    if not fx["findings"]:
+        lines.append("- none triggered")
+    for finding in fx["findings"]:
+        lines.append(f"- [{finding.get('kind')}] {finding.get('detail')} (weight {finding.get('severity')})")
+    return lines
+
+
+def _forensic_story(fx: dict, styles) -> list:
+    """Flowables for the origin, hop table and checks sections of the PDF."""
+    if not fx["is_email"]:
+        return []
+    cell = styles["BodyText"]
+    story: list = [
+        Paragraph("Origin and location", styles["Heading2"]),
+        Paragraph(f"<b>Origin IP:</b> {escape(fx['origin_ip'])}", cell),
+        Paragraph(f"<b>Confidence:</b> {escape(fx['confidence'])}", cell),
+        Paragraph(escape(fx["origin_reason"]), cell),
+        Paragraph(f"<b>Location:</b> {escape(fx['location'])}", cell),
+        Paragraph(escape(fx["location_note"]), cell),
+        Spacer(1, 3 * mm),
+        Paragraph("Received chain (oldest hop first)", styles["Heading2"]),
+    ]
+    if fx["hops"]:
+        rows = [[Paragraph(h, cell) for h in ("Hop", "From", "By", "IP", "Time (UTC)", "Delay", "Note")]]
+        for hop in fx["hops"]:
+            delay = hop.get("delay_seconds")
+            rows.append([
+                Paragraph(escape(str(hop.get("hop", ""))), cell),
+                Paragraph(escape(hop.get("from_host") or "-"), cell),
+                Paragraph(escape(hop.get("by_host") or "-"), cell),
+                Paragraph(escape(hop.get("ip") or "-"), cell),
+                Paragraph(escape(hop.get("timestamp") or "-"), cell),
+                Paragraph("-" if delay is None else f"{delay}s", cell),
+                Paragraph(escape(hop.get("anomaly") or "none"), cell),
+            ])
+        table = Table(rows, repeatRows=1, colWidths=[12 * mm, 34 * mm, 34 * mm, 28 * mm, 34 * mm, 14 * mm, 28 * mm])
+        table.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.3, colors.grey),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef2f8")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ]))
+        story.append(table)
+    else:
+        story.append(Paragraph("No Received headers in this message, so the route cannot be traced.", cell))
+    story += [Spacer(1, 3 * mm), Paragraph("Checks", styles["Heading2"])]
+    if fx["findings"]:
+        story.append(ListFlowable(
+            [ListItem(Paragraph(escape(f"[{f.get('kind')}] {f.get('detail')} (weight {f.get('severity')})"), cell))
+             for f in fx["findings"]],
+            bulletType="bullet", leftIndent=16,
+        ))
+    else:
+        story.append(Paragraph("No header or sender checks were triggered.", cell))
+    return story
+
+
 def generate_report(case_id: str, result: dict) -> bytes:
     """Return an A4 PDF for an analysis result."""
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -54,6 +155,7 @@ def generate_report(case_id: str, result: dict) -> bytes:
         if isinstance(url, dict) and url.get("defanged")
     ] or [_NOT_AVAILABLE]
 
+    fx = _forensic_summary(result)
     report_lines = [
         f"Case ID: {case_id}",
         f"UTC timestamp: {timestamp}",
@@ -63,6 +165,7 @@ def generate_report(case_id: str, result: dict) -> bytes:
         *[f"- {reason}" for reason in reasons],
         "Defanged links:",
         *[f"- {url}" for url in urls],
+        *_forensic_text_lines(fx),
         f"Model name: {model_name}",
         f"Test F1: {test_f1}",
         f"Limitations: {_LIMITATIONS}",
@@ -102,6 +205,8 @@ def generate_report(case_id: str, result: dict) -> bytes:
             bulletType="bullet",
             leftIndent=16,
         ),
+        Spacer(1, 4 * mm),
+        *_forensic_story(fx, styles),
         Spacer(1, 4 * mm),
         Paragraph(f"<b>Model name:</b> {escape(model_name)}", styles["BodyText"]),
         Paragraph(f"<b>Test F1:</b> {escape(test_f1)}", styles["BodyText"]),

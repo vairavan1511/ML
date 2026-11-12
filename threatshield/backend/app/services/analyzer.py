@@ -22,6 +22,10 @@ from app.services.email_parser import parse_email
 from app.services.scoring import score_email, score_sms
 from app.services.explain import build_reasons
 from app.services.highlight import get_highlights
+from app.services.header_forensics import analyse_headers
+from app.services.geolocate import locate_ip
+import email as _email
+import email.policy as _policy
 
 
 @lru_cache(maxsize=1)
@@ -50,7 +54,8 @@ def _url_results(links: list[dict]) -> tuple[list[dict], list[int], list[str]]:
         r = analyse_url(link.get("href", ""), link_text=link.get("text") or None)
         results.append(r)
         scores.append(r["risk"])
-        reasons.extend(r["reasons"])
+        if r["risk"] > 0:  # a benign link adds no reason (avoids "no signals" text beside warnings)
+            reasons.extend(r["reasons"])
     return results, scores, reasons
 
 
@@ -63,15 +68,20 @@ def analyse_email_text(raw: str | bytes) -> dict[str, Any]:
     ml_prob = _ml_score(full_text)
     url_results, url_scores, url_reasons = _url_results(parsed["links"])
 
-    # Simple header score: penalise missing auth, reply-to mismatch
-    header_score = _header_score(parsed)
+    # Header forensics: Received chain, stated authentication, spoofing checks
+    raw_bytes = raw.encode("utf-8", errors="replace") if isinstance(raw, str) else raw
+    msg = _email.message_from_bytes(raw_bytes, policy=_policy.compat32)
+    forensics = analyse_headers(msg, body_text=body, subject=parsed["subject"])
+    header_score = float(forensics["score"])
+    geo = locate_ip(forensics["origin"]["ip"])
 
     # Attachment score: penalise executable/macro types
     att_flags = _attachment_flags(parsed["attachments"])
     att_score = min(100.0, len(att_flags) * 30)
 
+    header_flags = [f["detail"] for f in forensics["findings"]]
     risk, verdict = score_email(ml_prob, url_scores, header_score, att_score)
-    reasons = build_reasons(full_text, att_flags, url_reasons, [], ml_prob)
+    reasons = build_reasons(full_text, att_flags + header_flags, url_reasons, [], ml_prob)
     highlights = get_highlights(full_text)
 
     return {
@@ -82,6 +92,8 @@ def analyse_email_text(raw: str | bytes) -> dict[str, Any]:
         "urls": url_results,
         "ml_score": round(ml_prob, 4),
         "channel": "email",
+        "forensics": forensics,
+        "geolocation": geo,
         "metadata": {
             "subject": parsed["subject"],
             "from_": parsed["from_"],
@@ -131,31 +143,6 @@ def analyse_sms_text(text: str, sender: str | None = None) -> dict[str, Any]:
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
-
-def _header_score(parsed: dict) -> float:
-    score = 0.0
-    auth = parsed.get("auth", {})
-    spf = (auth.get("spf") or "").lower()
-    if "fail" in spf:
-        score += 40
-    elif "softfail" in spf:
-        score += 20
-    elif not spf:
-        score += 10
-    if not auth.get("dkim"):
-        score += 15
-    # Reply-To differs from From domain
-    from_addr = parsed.get("from_", "")
-    reply_to  = parsed.get("reply_to", "")
-    if reply_to and from_addr:
-        def _domain(addr):
-            import re
-            m = re.search(r"@([\w.\-]+)", addr)
-            return m.group(1).lower() if m else ""
-        if _domain(from_addr) and _domain(reply_to) and _domain(from_addr) != _domain(reply_to):
-            score += 25
-    return min(score, 100.0)
-
 
 def _attachment_flags(attachments: list[dict]) -> list[str]:
     RISKY_TYPES = {
