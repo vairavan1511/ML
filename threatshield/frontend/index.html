@@ -89,6 +89,16 @@
     </div>
 
     <div>
+      <a id="downloadReport" class="hidden inline-block rounded-lg bg-slate-700 px-4 py-2 text-sm font-semibold text-white dark:bg-slate-600">Download report</a>
+    </div>
+
+    <section id="adviceCard" class="hidden rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/40">
+      <h3 class="font-semibold mb-1">What should I do now?</h3>
+      <p id="adviceTitle" class="font-medium mb-2"></p>
+      <ul id="adviceSteps" class="list-disc pl-5 space-y-1 text-sm"></ul>
+    </section>
+
+    <div>
       <h3 class="font-semibold mb-2">Why?</h3>
       <ul id="reasons" class="list-disc pl-5 space-y-1 text-sm"></ul>
     </div>
@@ -241,6 +251,23 @@ http://www.sbi.co.in/verify
     ul.textContent = '';
     const list = items && items.length ? items : [NA];
     list.forEach((t) => { const li = document.createElement('li'); setText(li, t); ul.appendChild(li); });
+  }
+
+  function fillAdvice(advice) {
+    const card = $('adviceCard');
+    const steps = $('adviceSteps');
+    steps.textContent = '';
+    if (!advice || !Array.isArray(advice.steps) || !advice.steps.length) {
+      card.classList.add('hidden');
+      return;
+    }
+    setText($('adviceTitle'), advice.title || 'What should I do now?');
+    advice.steps.forEach((step) => {
+      const li = document.createElement('li');
+      setText(li, step);
+      steps.appendChild(li);
+    });
+    card.classList.remove('hidden');
   }
 
   function fillChips(el, items) {
@@ -414,6 +441,15 @@ http://www.sbi.co.in/verify
   /* ---------- rendering ---------- */
   function renderResult(d) {
     paint(d.verdict, VERDICT_TONE[d.verdict] || 'warn', d.risk_score);
+    const reportLink = $('downloadReport');
+    if (typeof d.case_id === 'string' && d.case_id) {
+      reportLink.href = '/api/report/' + encodeURIComponent(d.case_id) + '.pdf';
+      reportLink.classList.remove('hidden');
+    } else {
+      reportLink.removeAttribute('href');
+      reportLink.classList.add('hidden');
+    }
+    fillAdvice(d.advice);
     setText($('channelLine'), 'Channel: ' + (d.channel || NA));
     fillList($('reasons'), d.reasons);
     fillChips($('highlights'), d.highlights);
@@ -435,11 +471,51 @@ http://www.sbi.co.in/verify
     $('emailPreviewSection').classList.toggle('hidden', !preview);
     $('emailPreviewContent').classList.add('hidden');
     $('previewToggle').setAttribute('aria-expanded', 'false');
-    $('emailPreviewFrame').srcdoc = preview;
+    $('emailPreviewFrame').srcdoc = preview ? highlightedPreview(preview, d.highlights) : '';
+  }
+
+  function highlightedPreview(preview, highlights) {
+    const previewDoc = new DOMParser().parseFromString(preview, 'text/html');
+    const terms = (highlights || [])
+      .filter((term) => typeof term === 'string' && term.length)
+      .sort((a, b) => b.length - a.length);
+    if (terms.length) {
+      const pattern = new RegExp('(' + terms.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi');
+      const walker = previewDoc.createTreeWalker(previewDoc.body, NodeFilter.SHOW_TEXT);
+      const textNodes = [];
+      let node;
+      while ((node = walker.nextNode())) {
+        if (!node.parentElement.closest('script, style, mark')) textNodes.push(node);
+      }
+      textNodes.forEach((textNode) => {
+        const text = textNode.nodeValue;
+        const fragment = previewDoc.createDocumentFragment();
+        let lastIndex = 0;
+        let match;
+        pattern.lastIndex = 0;
+        while ((match = pattern.exec(text))) {
+          fragment.appendChild(previewDoc.createTextNode(text.slice(lastIndex, match.index)));
+          const mark = previewDoc.createElement('mark');
+          mark.title = match[0];
+          mark.appendChild(previewDoc.createTextNode(match[0]));
+          fragment.appendChild(mark);
+          lastIndex = pattern.lastIndex;
+        }
+        if (lastIndex) {
+          fragment.appendChild(previewDoc.createTextNode(text.slice(lastIndex)));
+          textNode.parentNode.replaceChild(fragment, textNode);
+        }
+      });
+    }
+    const body = new XMLSerializer().serializeToString(previewDoc.body);
+    return '<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:sans-serif;padding:1rem}mark{background:#fde68a;color:#78350f}</style></head>' + body + '</html>';
   }
 
   function renderUrl(d) {
     paint(d.level + ' RISK', LEVEL_TONE[d.level] || 'warn', d.risk);
+    $('downloadReport').removeAttribute('href');
+    $('downloadReport').classList.add('hidden');
+    $('adviceCard').classList.add('hidden');
     setText($('channelLine'), 'Link check (static analysis only)');
     fillList($('reasons'), d.reasons);
     fillChips($('highlights'), []);

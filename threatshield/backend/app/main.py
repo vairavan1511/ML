@@ -12,12 +12,15 @@ if _ML_DIR not in sys.path:
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.schemas import AnalysisResult, AnalysisRequest, HealthResponse, ModelInfo, URLResult
 from app.services.analyzer import analyse_email_text, analyse_sms_text, _load_model
+from app.services.advice import advice_for
+from app.services.cases import get as get_case, save as save_case
+from app.services.report_pdf import generate_report
 from app.services.urls import analyse_url
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -127,8 +130,21 @@ async def analyze_url_endpoint(body: AnalysisRequest):
     return analyse_url(url)
 
 
+# ── Analysis report ───────────────────────────────────────────────────────────
+@app.get("/api/report/{case_id}.pdf", tags=["report"])
+async def analysis_report(case_id: str):
+    result = get_case(case_id)
+    if result is None:
+        raise HTTPException(404, "Analysis case not found")
+    return Response(
+        content=generate_report(case_id, result),
+        media_type="application/pdf",
+    )
+
+
 # ── Helper ────────────────────────────────────────────────────────────────────
 def _to_response(result: dict) -> AnalysisResult:
+    case_id = save_case(result)
     return AnalysisResult(
         verdict=result["verdict"],
         risk_score=result["risk_score"],
@@ -138,4 +154,6 @@ def _to_response(result: dict) -> AnalysisResult:
         ml_score=result["ml_score"],
         channel=result["channel"],
         metadata=result.get("metadata", {}),
+        case_id=case_id,
+        advice=advice_for(result["verdict"]),
     )

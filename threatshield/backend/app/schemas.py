@@ -17,6 +17,11 @@ class AnalysisRequest(BaseModel):
     sender: str | None = None   # SMS sender ID
 
 
+class Advice(BaseModel):
+    title: str
+    steps: list[str]
+
+
 class AnalysisResult(BaseModel):
     verdict: str                # SAFE / SUSPICIOUS / SPAM-PHISHING
     risk_score: int             # 0-100
@@ -26,6 +31,8 @@ class AnalysisResult(BaseModel):
     ml_score: float
     channel: str
     metadata: dict[str, Any] = {}
+    case_id: str | None = None
+    advice: Advice
 
 
 class ModelInfo(BaseModel):
