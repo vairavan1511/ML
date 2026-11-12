@@ -7,7 +7,7 @@
     "precision": 0.9894,
     "recall": 0.9816,
     "f1": 0.9855,
-    "roc_auc": 0.9994,
+    "roc_auc": 0.9993,
     "confusion_matrix": [
       [
         1049,
@@ -18,7 +18,7 @@
         374
       ]
     ],
-    "train_time_s": 13.05
+    "train_time_s": 13.15
   },
   "test_metrics_by_channel": [
     {
@@ -64,10 +64,10 @@
     {
       "model": "NaiveBayes",
       "channel": "overall",
-      "accuracy": 0.9735,
-      "precision": 0.9858,
-      "recall": 0.9134,
-      "f1": 0.9482,
+      "accuracy": 0.9749,
+      "precision": 0.9859,
+      "recall": 0.9186,
+      "f1": 0.9511,
       "roc_auc": 0.9905,
       "confusion_matrix": [
         [
@@ -75,11 +75,11 @@
           5
         ],
         [
-          33,
-          348
+          31,
+          350
         ]
       ],
-      "train_time_s": 3.59
+      "train_time_s": 3.36
     },
     {
       "model": "LogisticRegression",
@@ -99,27 +99,27 @@
           349
         ]
       ],
-      "train_time_s": 4.29
+      "train_time_s": 4.28
     },
     {
       "model": "RandomForest",
       "channel": "overall",
-      "accuracy": 0.9839,
+      "accuracy": 0.9853,
       "precision": 1.0,
-      "recall": 0.9396,
-      "f1": 0.9689,
-      "roc_auc": 0.9958,
+      "recall": 0.9449,
+      "f1": 0.9717,
+      "roc_auc": 0.995,
       "confusion_matrix": [
         [
           1052,
           0
         ],
         [
-          23,
-          358
+          21,
+          360
         ]
       ],
-      "train_time_s": 4.88
+      "train_time_s": 4.52
     },
     {
       "model": "LinearSVM",
@@ -139,7 +139,7 @@
           371
         ]
       ],
-      "train_time_s": 12.22
+      "train_time_s": 10.84
     }
   ],
   "dataset_sizes": {
