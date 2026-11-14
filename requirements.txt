@@ -1,0 +1,16 @@
+fastapi
+pydantic
+pydantic-settings
+python-dotenv
+joblib
+numpy
+pandas
+scipy
+scikit-learn
+reportlab
+geoip2
+tldextract
+pdfminer.six
+pytest
+httpx
+python-multipart
